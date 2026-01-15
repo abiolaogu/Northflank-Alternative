@@ -1,0 +1,174 @@
+# Default values for openpaas
+replicaCount: 2
+
+image:
+  repository: openpaas/platform-orchestrator
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: api.openpaas.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: openpaas-tls
+      hosts:
+        - api.openpaas.local
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Platform Orchestrator Configuration
+config:
+  server:
+    host: "0.0.0.0"
+    port: 8080
+    readTimeout: 30s
+    writeTimeout: 30s
+    shutdownTimeout: 10s
+    corsEnabled: true
+    corsOrigins:
+      - "*"
+
+  logging:
+    level: info
+    format: json
+
+  metrics:
+    enabled: true
+    path: /metrics
+
+  auth:
+    jwtExpiration: 24h
+    refreshExpiration: 168h
+    sessionTimeout: 30m
+    bcryptCost: 12
+    apiKeyEnabled: true
+    rateLimitEnabled: true
+    rateLimitRequests: 100
+    rateLimitWindow: 1m
+
+# Secrets - override these in production
+secrets:
+  jwtSecret: "change-me-in-production"
+  coolifyApiKey: ""
+  rancherToken: ""
+  argoCdToken: ""
+
+# Database configuration
+database:
+  host: ""  # Set to external DB or leave empty to use subchart
+  port: 5432
+  name: openpaas
+  user: openpaas
+  password: ""  # Use secrets in production
+  sslMode: disable
+
+# NATS configuration
+natsUrl: ""  # Set to external NATS or leave empty to use subchart
+
+# External service URLs
+coolify:
+  url: "http://coolify:3000"
+  timeout: 60s
+
+rancher:
+  url: "https://rancher:8443"
+  timeout: 60s
+  tlsSkipVerify: false
+
+argocd:
+  url: "https://argocd-server:8080"
+  timeout: 60s
+  tlsSkipVerify: false
+  appProject: default
+  syncPolicy:
+    automated: true
+    prune: true
+    selfHeal: true
+
+# Subchart configuration
+postgresql:
+  enabled: true
+  auth:
+    username: openpaas
+    password: openpaas
+    database: openpaas
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+
+nats:
+  enabled: true
+  config:
+    jetstream:
+      enabled: true
+      memStorage:
+        enabled: true
+        size: 1Gi
+      fileStorage:
+        enabled: true
+        size: 10Gi
+
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 1Gi

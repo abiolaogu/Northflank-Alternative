@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-orchestrator-config
+  namespace: openpaas
+  labels:
+    app.kubernetes.io/name: platform-orchestrator
+data:
+  coolify-url: "http://coolify.coolify.svc.cluster.local:3000"
+  rancher-url: "https://rancher.cattle-system.svc.cluster.local"
+  argocd-url: "https://argocd-server.argocd.svc.cluster.local"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: platform-orchestrator-secrets
+  namespace: openpaas
+  labels:
+    app.kubernetes.io/name: platform-orchestrator
+type: Opaque
+stringData:
+  database-host: "postgresql.openpaas.svc.cluster.local"
+  database-user: "openpaas"
+  database-password: "CHANGE_ME_IN_PRODUCTION"
+  nats-url: "nats://nats.openpaas.svc.cluster.local:4222"
+  jwt-secret: "CHANGE_ME_IN_PRODUCTION_USE_STRONG_SECRET"
+  coolify-api-key: "CHANGE_ME"
+  rancher-token: "CHANGE_ME"
+  argocd-token: "CHANGE_ME"
