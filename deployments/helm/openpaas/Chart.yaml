@@ -13,9 +13,9 @@ keywords:
 maintainers:
   - name: OpenPaaS Team
     email: team@openpaas.io
-home: https://github.com/openpaas/platform-orchestrator
+home: https://github.com/northstack/platform
 sources:
-  - https://github.com/openpaas/platform-orchestrator
+  - https://github.com/northstack/platform
 dependencies:
   - name: postgresql
     version: "14.0.0"

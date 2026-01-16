@@ -12,10 +12,10 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/openpaas/platform-orchestrator/internal/config"
-	"github.com/openpaas/platform-orchestrator/internal/domain"
-	"github.com/openpaas/platform-orchestrator/pkg/errors"
-	"github.com/openpaas/platform-orchestrator/pkg/logger"
+	"github.com/northstack/platform/internal/config"
+	"github.com/northstack/platform/internal/domain"
+	"github.com/northstack/platform/pkg/errors"
+	"github.com/northstack/platform/pkg/logger"
 )
 
 // Adapter implements the ClusterManagerAdapter interface for Rancher

@@ -1,0 +1,502 @@
+# Backstage Developer Portal for NorthStack
+# Internal Developer Portal for self-service
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack-backstage
+  labels:
+    app.kubernetes.io/name: backstage
+    northstack.io/component: developer-portal
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-config
+  namespace: northstack-backstage
+data:
+  app-config.yaml: |
+    app:
+      title: NorthStack Developer Portal
+      baseUrl: https://portal.northstack.io
+
+    organization:
+      name: NorthStack
+
+    backend:
+      baseUrl: https://portal.northstack.io
+      listen:
+        port: 7007
+      csp:
+        connect-src: ["'self'", 'http:', 'https:']
+      cors:
+        origin: https://portal.northstack.io
+        methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+        credentials: true
+      database:
+        client: pg
+        connection:
+          host: ${POSTGRES_HOST}
+          port: ${POSTGRES_PORT}
+          user: ${POSTGRES_USER}
+          password: ${POSTGRES_PASSWORD}
+          database: backstage
+
+    integrations:
+      github:
+        - host: github.com
+          token: ${GITHUB_TOKEN}
+
+    proxy:
+      '/northstack':
+        target: https://api.northstack.io
+        headers:
+          Authorization: Bearer ${NORTHSTACK_TOKEN}
+      '/grafana':
+        target: https://monitor.northstack.io
+        headers:
+          Authorization: Bearer ${GRAFANA_TOKEN}
+
+    techdocs:
+      builder: 'local'
+      generator:
+        runIn: 'local'
+      publisher:
+        type: 'local'
+
+    auth:
+      environment: production
+      providers:
+        github:
+          production:
+            clientId: ${GITHUB_CLIENT_ID}
+            clientSecret: ${GITHUB_CLIENT_SECRET}
+
+    scaffolder:
+      defaultAuthor:
+        name: NorthStack
+        email: platform@northstack.io
+
+    catalog:
+      import:
+        entityFilename: catalog-info.yaml
+        pullRequestBranchName: backstage-integration
+      rules:
+        - allow: [Component, System, API, Resource, Location, Template]
+      locations:
+        # NorthStack templates
+        - type: file
+          target: /app/catalog/templates.yaml
+        # NorthStack systems
+        - type: file
+          target: /app/catalog/systems.yaml
+        # All teams
+        - type: file
+          target: /app/catalog/teams.yaml
+
+    kubernetes:
+      serviceLocatorMethod:
+        type: 'multiTenant'
+      clusterLocatorMethods:
+        - type: 'config'
+          clusters:
+            - url: ${KUBERNETES_API}
+              name: production
+              authProvider: 'serviceAccount'
+              serviceAccountToken: ${KUBERNETES_TOKEN}
+              skipTLSVerify: true
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-catalog
+  namespace: northstack-backstage
+data:
+  templates.yaml: |
+    apiVersion: backstage.io/v1alpha1
+    kind: Location
+    metadata:
+      name: northstack-templates
+      description: NorthStack Service Templates
+    spec:
+      targets:
+        - ./web-service-template.yaml
+        - ./worker-template.yaml
+        - ./database-template.yaml
+
+  web-service-template.yaml: |
+    apiVersion: scaffolder.backstage.io/v1beta3
+    kind: Template
+    metadata:
+      name: northstack-web-service
+      title: NorthStack Web Service
+      description: Create a new web service on NorthStack
+      tags:
+        - recommended
+        - web
+        - nodejs
+        - go
+    spec:
+      owner: platform-team
+      type: service
+      parameters:
+        - title: Service Details
+          required:
+            - name
+            - projectId
+          properties:
+            name:
+              title: Service Name
+              type: string
+              description: Name of your service
+              pattern: ^[a-z0-9-]+$
+            projectId:
+              title: Project
+              type: string
+              description: NorthStack project ID
+              ui:field: EntityPicker
+            language:
+              title: Language
+              type: string
+              enum: ['nodejs', 'go', 'python', 'java']
+              default: nodejs
+        - title: Repository
+          required:
+            - repoUrl
+          properties:
+            repoUrl:
+              title: Repository Location
+              type: string
+              ui:field: RepoUrlPicker
+              ui:options:
+                allowedHosts:
+                  - github.com
+        - title: Resources
+          properties:
+            cpuRequest:
+              title: CPU Request
+              type: string
+              default: '250m'
+            memoryRequest:
+              title: Memory Request
+              type: string
+              default: '256Mi'
+            replicas:
+              title: Min Replicas
+              type: integer
+              default: 2
+      steps:
+        - id: fetch-base
+          name: Fetch Base Template
+          action: fetch:template
+          input:
+            url: ./skeleton-${{ parameters.language }}
+            values:
+              name: ${{ parameters.name }}
+        - id: publish
+          name: Publish to GitHub
+          action: publish:github
+          input:
+            allowedHosts: ['github.com']
+            repoUrl: ${{ parameters.repoUrl }}
+        - id: create-service
+          name: Create NorthStack Service
+          action: http:backstage:request
+          input:
+            method: POST
+            path: /proxy/northstack/api/v1/projects/${{ parameters.projectId }}/services
+            headers:
+              Content-Type: application/json
+            body:
+              name: ${{ parameters.name }}
+              type: webapp
+              build_source:
+                type: git
+                repository: ${{ steps.publish.output.remoteUrl }}
+                branch: main
+              resources:
+                cpu_request: ${{ parameters.cpuRequest }}
+                memory_request: ${{ parameters.memoryRequest }}
+              scaling:
+                min_replicas: ${{ parameters.replicas }}
+        - id: register
+          name: Register in Catalog
+          action: catalog:register
+          input:
+            catalogInfoPath: '/catalog-info.yaml'
+      output:
+        links:
+          - title: Repository
+            url: ${{ steps.publish.output.remoteUrl }}
+          - title: NorthStack Service
+            url: https://api.northstack.io/services/${{ steps.create-service.output.body.id }}
+
+  worker-template.yaml: |
+    apiVersion: scaffolder.backstage.io/v1beta3
+    kind: Template
+    metadata:
+      name: northstack-worker
+      title: NorthStack Worker Service
+      description: Create a background worker service
+      tags:
+        - worker
+        - background
+    spec:
+      owner: platform-team
+      type: service
+      parameters:
+        - title: Worker Details
+          required:
+            - name
+          properties:
+            name:
+              title: Service Name
+              type: string
+      steps:
+        - id: log
+          name: Log
+          action: debug:log
+          input:
+            message: Creating worker ${{ parameters.name }}
+
+  database-template.yaml: |
+    apiVersion: scaffolder.backstage.io/v1beta3
+    kind: Template
+    metadata:
+      name: northstack-database
+      title: NorthStack Database
+      description: Provision a YugabyteDB database
+      tags:
+        - database
+        - yugabytedb
+        - postgresql
+    spec:
+      owner: platform-team
+      type: resource
+      parameters:
+        - title: Database Details
+          required:
+            - name
+            - projectId
+            - size
+          properties:
+            name:
+              title: Database Name
+              type: string
+            projectId:
+              title: Project
+              type: string
+            size:
+              title: Size
+              type: string
+              enum: ['small', 'medium', 'large', 'xlarge']
+              default: small
+            highAvailability:
+              title: High Availability
+              type: boolean
+              default: false
+            backupEnabled:
+              title: Enable Backups
+              type: boolean
+              default: true
+      steps:
+        - id: create-database
+          name: Create Database
+          action: http:backstage:request
+          input:
+            method: POST
+            path: /proxy/northstack/api/v1/projects/${{ parameters.projectId }}/databases
+            body:
+              name: ${{ parameters.name }}
+              size: ${{ parameters.size }}
+              high_availability: ${{ parameters.highAvailability }}
+              backup_enabled: ${{ parameters.backupEnabled }}
+
+  systems.yaml: |
+    apiVersion: backstage.io/v1alpha1
+    kind: System
+    metadata:
+      name: northstack-platform
+      description: NorthStack Internal Platform
+      tags:
+        - platform
+    spec:
+      owner: platform-team
+    ---
+    apiVersion: backstage.io/v1alpha1
+    kind: API
+    metadata:
+      name: northstack-api
+      description: NorthStack REST API
+    spec:
+      type: openapi
+      lifecycle: production
+      owner: platform-team
+      system: northstack-platform
+      definition:
+        $text: https://api.northstack.io/openapi.json
+    ---
+    apiVersion: backstage.io/v1alpha1
+    kind: API
+    metadata:
+      name: northstack-graphql
+      description: NorthStack GraphQL API (Hasura)
+    spec:
+      type: graphql
+      lifecycle: production
+      owner: platform-team
+      system: northstack-platform
+      definition:
+        $text: https://graphql.northstack.io/v1/graphql/introspect
+
+  teams.yaml: |
+    apiVersion: backstage.io/v1alpha1
+    kind: Group
+    metadata:
+      name: platform-team
+      description: NorthStack Platform Team
+    spec:
+      type: team
+      children: []
+    ---
+    apiVersion: backstage.io/v1alpha1
+    kind: Group
+    metadata:
+      name: developers
+      description: All Developers
+    spec:
+      type: team
+      parent: platform-team
+      children: []
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backstage
+  namespace: northstack-backstage
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backstage
+  template:
+    metadata:
+      labels:
+        app: backstage
+    spec:
+      containers:
+        - name: backstage
+          image: backstage/backstage:1.20.0
+          ports:
+            - containerPort: 7007
+          env:
+            - name: POSTGRES_HOST
+              value: yugabyte-ysql.northstack-database.svc
+            - name: POSTGRES_PORT
+              value: "5433"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: backstage-secrets
+                  key: postgres-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backstage-secrets
+                  key: postgres-password
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backstage-secrets
+                  key: github-token
+            - name: NORTHSTACK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backstage-secrets
+                  key: northstack-token
+          volumeMounts:
+            - name: config
+              mountPath: /app/app-config.yaml
+              subPath: app-config.yaml
+            - name: catalog
+              mountPath: /app/catalog
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 7007
+            initialDelaySeconds: 60
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 7007
+            initialDelaySeconds: 30
+      volumes:
+        - name: config
+          configMap:
+            name: backstage-config
+        - name: catalog
+          configMap:
+            name: backstage-catalog
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backstage
+  namespace: northstack-backstage
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 7007
+  selector:
+    app: backstage
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backstage
+  namespace: northstack-backstage
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - portal.northstack.io
+      secretName: backstage-tls
+  rules:
+    - host: portal.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backstage
+                port:
+                  number: 80
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backstage-secrets
+  namespace: northstack-backstage
+type: Opaque
+stringData:
+  postgres-user: "backstage"
+  postgres-password: "CHANGE_ME"
+  github-token: "CHANGE_ME"
+  northstack-token: "CHANGE_ME"

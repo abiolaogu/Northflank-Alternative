@@ -1,0 +1,157 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack-hasura
+  labels:
+    app.kubernetes.io/name: hasura
+    northstack.io/managed: "true"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hasura
+  namespace: northstack-hasura
+  labels:
+    app: hasura
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hasura
+  template:
+    metadata:
+      labels:
+        app: hasura
+    spec:
+      containers:
+        - name: hasura
+          image: hasura/graphql-engine:v2.36.0
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: HASURA_GRAPHQL_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: hasura-secrets
+                  key: DATABASE_URL
+            - name: HASURA_GRAPHQL_ADMIN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: hasura-secrets
+                  key: ADMIN_SECRET
+            - name: HASURA_GRAPHQL_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: hasura-secrets
+                  key: JWT_SECRET
+            - name: HASURA_GRAPHQL_ENABLE_CONSOLE
+              value: "true"
+            - name: HASURA_GRAPHQL_DEV_MODE
+              value: "false"
+            - name: HASURA_GRAPHQL_ENABLED_LOG_TYPES
+              value: "startup, http-log, webhook-log, websocket-log, query-log"
+            - name: HASURA_GRAPHQL_UNAUTHORIZED_ROLE
+              value: "anonymous"
+            - name: HASURA_GRAPHQL_CORS_DOMAIN
+              value: "*"
+            - name: HASURA_GRAPHQL_ENABLE_TELEMETRY
+              value: "false"
+            # Event triggers webhook
+            - name: EVENTS_WEBHOOK_URL
+              value: "http://northstack-orchestrator.northstack.svc/api/v1/webhooks/hasura"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hasura
+  namespace: northstack-hasura
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: hasura
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hasura
+  namespace: northstack-hasura
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - graphql.northstack.io
+      secretName: hasura-tls
+  rules:
+    - host: graphql.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hasura
+                port:
+                  number: 80
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hasura-secrets
+  namespace: northstack-hasura
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://northstack:CHANGE_ME@yugabyte-ysql.northstack-database.svc:5433/northstack"
+  ADMIN_SECRET: "CHANGE_ME_ADMIN_SECRET"
+  JWT_SECRET: '{"type":"HS256","key":"CHANGE_ME_JWT_SECRET_32_CHARS_MIN"}'
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hasura
+  namespace: northstack-hasura
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hasura
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

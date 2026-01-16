@@ -1,0 +1,533 @@
+# Backstage Unified Dashboard - Plugin Configuration
+# Brings Coolify, ArgoCD, Grafana, Hasura, Superset into single portal
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-app-config-plugins
+  namespace: northstack-backstage
+data:
+  app-config.plugins.yaml: |
+    # ============================================
+    # UNIFIED DASHBOARD PLUGINS
+    # Recreates Coolify UI + integrates all tools
+    # ============================================
+    
+    app:
+      title: NorthStack Platform Portal
+      baseUrl: https://portal.northstack.io
+      support:
+        url: https://docs.northstack.io
+        items:
+          - title: Documentation
+            icon: docs
+            links:
+              - url: https://docs.northstack.io
+                title: User Guide
+          - title: API Reference
+            icon: code
+            links:
+              - url: https://api.northstack.io/docs
+                title: REST API
+              - url: https://graphql.northstack.io
+                title: GraphQL
+
+    # ============================================
+    # PROXY CONFIGURATION
+    # Routes to all integrated services
+    # ============================================
+    proxy:
+      endpoints:
+        # NorthStack API
+        '/northstack':
+          target: https://api.northstack.io
+          headers:
+            Authorization: Bearer ${NORTHSTACK_TOKEN}
+        
+        # Coolify Build Service
+        '/coolify':
+          target: ${COOLIFY_URL}
+          headers:
+            Authorization: Bearer ${COOLIFY_TOKEN}
+        
+        # ArgoCD GitOps
+        '/argocd':
+          target: https://argocd.northstack.io
+          headers:
+            Authorization: Bearer ${ARGOCD_TOKEN}
+        
+        # Grafana Monitoring
+        '/grafana':
+          target: https://monitor.northstack.io
+          headers:
+            Authorization: Bearer ${GRAFANA_TOKEN}
+        
+        # Hasura GraphQL
+        '/hasura':
+          target: https://graphql.northstack.io
+          headers:
+            X-Hasura-Admin-Secret: ${HASURA_ADMIN_SECRET}
+        
+        # Superset Analytics
+        '/superset':
+          target: https://analytics.northstack.io
+          headers:
+            Authorization: Bearer ${SUPERSET_TOKEN}
+        
+        # Redpanda Streaming
+        '/redpanda':
+          target: https://streams.northstack.io
+          headers:
+            Authorization: Bearer ${REDPANDA_TOKEN}
+
+    # ============================================
+    # KUBERNETES INTEGRATION
+    # ============================================
+    kubernetes:
+      serviceLocatorMethod:
+        type: 'multiTenant'
+      clusterLocatorMethods:
+        - type: 'config'
+          clusters:
+            - url: ${K8S_PRODUCTION_API}
+              name: production
+              authProvider: 'serviceAccount'
+              serviceAccountToken: ${K8S_PRODUCTION_TOKEN}
+            - url: ${K8S_STAGING_API}
+              name: staging
+              authProvider: 'serviceAccount'
+              serviceAccountToken: ${K8S_STAGING_TOKEN}
+
+    # ============================================
+    # ARGOCD INTEGRATION
+    # ============================================
+    argocd:
+      username: admin
+      password: ${ARGOCD_PASSWORD}
+      appLocatorMethods:
+        - type: 'config'
+          instances:
+            - name: production
+              url: https://argocd.northstack.io
+              token: ${ARGOCD_TOKEN}
+
+    # ============================================
+    # GRAFANA INTEGRATION
+    # ============================================
+    grafana:
+      domain: https://monitor.northstack.io
+      unifiedAlerting: true
+
+---
+# Coolify-style Build Dashboard Plugin
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-coolify-dashboard
+  namespace: northstack-backstage
+data:
+  CoolifyDashboard.tsx: |
+    import React from 'react';
+    import {
+      Content,
+      Page,
+      Header,
+      Progress,
+      Table,
+      TableColumn,
+      StatusOK,
+      StatusError,
+      StatusRunning,
+    } from '@backstage/core-components';
+    import { useApi, configApiRef } from '@backstage/core-plugin-api';
+    import useAsync from 'react-use/lib/useAsync';
+    
+    // Recreates Coolify's build dashboard UI in Backstage
+    export const CoolifyDashboardPage = () => {
+      const config = useApi(configApiRef);
+      const coolifyUrl = config.getString('proxy./coolify.target');
+      
+      const { value: builds, loading, error } = useAsync(async () => {
+        const response = await fetch('/api/proxy/coolify/api/v1/applications');
+        return response.json();
+      }, []);
+      
+      const columns: TableColumn[] = [
+        { title: 'Application', field: 'name' },
+        { title: 'Status', field: 'status', render: (row: any) => 
+          row.status === 'running' ? <StatusOK /> : 
+          row.status === 'building' ? <StatusRunning /> : 
+          <StatusError />
+        },
+        { title: 'Repository', field: 'repository' },
+        { title: 'Branch', field: 'branch' },
+        { title: 'Last Build', field: 'lastBuildAt' },
+        { title: 'Actions', render: (row: any) => (
+          <>
+            <button onClick={() => triggerBuild(row.id)}>Deploy</button>
+            <button onClick={() => viewLogs(row.id)}>Logs</button>
+          </>
+        )},
+      ];
+      
+      if (loading) return <Progress />;
+      if (error) return <div>Error loading builds</div>;
+      
+      return (
+        <Page themeId="tool">
+          <Header title="Build Dashboard" subtitle="Coolify-powered deployments" />
+          <Content>
+            <Table
+              title="Applications"
+              options={{ search: true, paging: true }}
+              columns={columns}
+              data={builds || []}
+            />
+          </Content>
+        </Page>
+      );
+    };
+
+  # ArgoCD Applications Dashboard
+  ArgoCDDashboard.tsx: |
+    import React from 'react';
+    import {
+      Content,
+      Page,
+      Header,
+      Progress,
+      Table,
+      TableColumn,
+      StatusOK,
+      StatusError,
+      StatusPending,
+    } from '@backstage/core-components';
+    import useAsync from 'react-use/lib/useAsync';
+    
+    // ArgoCD Application sync status
+    const SyncStatus = ({ status }: { status: string }) => {
+      switch (status) {
+        case 'Synced': return <StatusOK>Synced</StatusOK>;
+        case 'OutOfSync': return <StatusPending>Out of Sync</StatusPending>;
+        default: return <StatusError>Unknown</StatusError>;
+      }
+    };
+    
+    export const ArgoCDDashboardPage = () => {
+      const { value: apps, loading, error } = useAsync(async () => {
+        const response = await fetch('/api/proxy/argocd/api/v1/applications');
+        return response.json();
+      }, []);
+      
+      const columns: TableColumn[] = [
+        { title: 'Application', field: 'metadata.name' },
+        { title: 'Project', field: 'spec.project' },
+        { title: 'Sync Status', render: (row: any) => 
+          <SyncStatus status={row.status?.sync?.status} />
+        },
+        { title: 'Health', field: 'status.health.status' },
+        { title: 'Repo', field: 'spec.source.repoURL' },
+        { title: 'Path', field: 'spec.source.path' },
+        { title: 'Actions', render: (row: any) => (
+          <>
+            <button onClick={() => syncApp(row.metadata.name)}>Sync</button>
+            <button onClick={() => refreshApp(row.metadata.name)}>Refresh</button>
+          </>
+        )},
+      ];
+      
+      if (loading) return <Progress />;
+      
+      return (
+        <Page themeId="tool">
+          <Header title="GitOps Dashboard" subtitle="ArgoCD deployments" />
+          <Content>
+            <Table
+              title="Applications"
+              options={{ search: true }}
+              columns={columns}
+              data={apps?.items || []}
+            />
+          </Content>
+        </Page>
+      );
+    };
+
+  # Database Management Dashboard (YugabyteDB)
+  DatabaseDashboard.tsx: |
+    import React, { useState } from 'react';
+    import {
+      Content,
+      Page,
+      Header,
+      Progress,
+      Table,
+      TableColumn,
+      StatusOK,
+      StatusError,
+      InfoCard,
+      StructuredMetadataTable,
+    } from '@backstage/core-components';
+    import useAsync from 'react-use/lib/useAsync';
+    
+    export const DatabaseDashboardPage = () => {
+      const { value: databases, loading } = useAsync(async () => {
+        const response = await fetch('/api/proxy/northstack/api/v1/databases');
+        return response.json();
+      }, []);
+      
+      const [selectedDb, setSelectedDb] = useState(null);
+      
+      const columns: TableColumn[] = [
+        { title: 'Name', field: 'name' },
+        { title: 'Project', field: 'project_name' },
+        { title: 'Size', field: 'size' },
+        { title: 'Status', render: (row: any) => 
+          row.status === 'running' ? <StatusOK>Running</StatusOK> : 
+          <StatusError>{row.status}</StatusError>
+        },
+        { title: 'Replicas', field: 'replicas' },
+        { title: 'Storage', field: 'storage_gb', render: (row: any) => `${row.storage_gb} GB` },
+        { title: 'HA', render: (row: any) => row.high_availability ? 'Yes' : 'No' },
+        { title: 'Actions', render: (row: any) => (
+          <>
+            <button onClick={() => setSelectedDb(row)}>Details</button>
+            <button onClick={() => scaleDb(row.id)}>Scale</button>
+            <button onClick={() => backupDb(row.id)}>Backup</button>
+          </>
+        )},
+      ];
+      
+      if (loading) return <Progress />;
+      
+      return (
+        <Page themeId="tool">
+          <Header title="Database Management" subtitle="YugabyteDB clusters" />
+          <Content>
+            {selectedDb && (
+              <InfoCard title={`Database: ${selectedDb.name}`}>
+                <StructuredMetadataTable
+                  metadata={{
+                    'YSQL Endpoint': selectedDb.connection?.ysql_endpoint,
+                    'Secret Name': selectedDb.connection?.secret_name,
+                    'Version': selectedDb.version,
+                    'Created': selectedDb.created_at,
+                  }}
+                />
+              </InfoCard>
+            )}
+            <Table
+              title="Database Clusters"
+              options={{ search: true }}
+              columns={columns}
+              data={databases?.databases || []}
+            />
+          </Content>
+        </Page>
+      );
+    };
+
+  # Monitoring Dashboard with embedded Grafana panels
+  MonitoringDashboard.tsx: |
+    import React from 'react';
+    import {
+      Content,
+      Page,
+      Header,
+      InfoCard,
+    } from '@backstage/core-components';
+    
+    const GrafanaPanel = ({ panelId, title }: { panelId: number, title: string }) => (
+      <InfoCard title={title}>
+        <iframe
+          src={`https://monitor.northstack.io/d-solo/northstack-overview?panelId=${panelId}&theme=light`}
+          width="100%"
+          height="300"
+          frameBorder="0"
+        />
+      </InfoCard>
+    );
+    
+    export const MonitoringDashboardPage = () => {
+      return (
+        <Page themeId="tool">
+          <Header title="Monitoring" subtitle="Real-time platform metrics" />
+          <Content>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <GrafanaPanel panelId={1} title="Active Projects" />
+              <GrafanaPanel panelId={2} title="Running Services" />
+              <GrafanaPanel panelId={5} title="API Request Rate" />
+              <GrafanaPanel panelId={6} title="API Latency (p95)" />
+              <GrafanaPanel panelId={7} title="Build Success Rate" />
+              <GrafanaPanel panelId={9} title="Cluster Resource Usage" />
+            </div>
+          </Content>
+        </Page>
+      );
+    };
+
+  # Streams Dashboard (Redpanda)
+  StreamsDashboard.tsx: |
+    import React from 'react';
+    import {
+      Content,
+      Page,
+      Header,
+      Progress,
+      Table,
+      TableColumn,
+    } from '@backstage/core-components';
+    import useAsync from 'react-use/lib/useAsync';
+    
+    export const StreamsDashboardPage = () => {
+      const { value: topics, loading } = useAsync(async () => {
+        const response = await fetch('/api/proxy/redpanda/admin/v1/topics');
+        return response.json();
+      }, []);
+      
+      const columns: TableColumn[] = [
+        { title: 'Topic', field: 'topic' },
+        { title: 'Partitions', field: 'partition_count' },
+        { title: 'Replication', field: 'replication_factor' },
+        { title: 'Messages', field: 'message_count' },
+        { title: 'Actions', render: (row: any) => (
+          <>
+            <button onClick={() => viewMessages(row.topic)}>Messages</button>
+            <button onClick={() => viewConsumers(row.topic)}>Consumers</button>
+          </>
+        )},
+      ];
+      
+      if (loading) return <Progress />;
+      
+      return (
+        <Page themeId="tool">
+          <Header title="Event Streams" subtitle="Redpanda/Kafka topics" />
+          <Content>
+            <Table
+              title="Topics"
+              options={{ search: true }}
+              columns={columns}
+              data={topics || []}
+            />
+          </Content>
+        </Page>
+      );
+    };
+
+---
+# Backstage App Routes Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-routes
+  namespace: northstack-backstage
+data:
+  App.tsx: |
+    import React from 'react';
+    import { Routes, Route } from 'react-router-dom';
+    import { CoolifyDashboardPage } from './plugins/coolify/CoolifyDashboard';
+    import { ArgoCDDashboardPage } from './plugins/argocd/ArgoCDDashboard';
+    import { DatabaseDashboardPage } from './plugins/database/DatabaseDashboard';
+    import { MonitoringDashboardPage } from './plugins/monitoring/MonitoringDashboard';
+    import { StreamsDashboardPage } from './plugins/streams/StreamsDashboard';
+    
+    export const routes = (
+      <Routes>
+        {/* Home */}
+        <Route path="/" element={<HomePage />} />
+        
+        {/* Coolify-style Build Dashboard */}
+        <Route path="/builds" element={<CoolifyDashboardPage />} />
+        <Route path="/builds/:id" element={<BuildDetailPage />} />
+        <Route path="/builds/:id/logs" element={<BuildLogsPage />} />
+        
+        {/* GitOps (ArgoCD) */}
+        <Route path="/gitops" element={<ArgoCDDashboardPage />} />
+        <Route path="/gitops/:app" element={<AppDetailPage />} />
+        
+        {/* Database Management */}
+        <Route path="/databases" element={<DatabaseDashboardPage />} />
+        <Route path="/databases/:id" element={<DatabaseDetailPage />} />
+        
+        {/* Monitoring (Grafana) */}
+        <Route path="/monitoring" element={<MonitoringDashboardPage />} />
+        <Route path="/monitoring/alerts" element={<AlertsPage />} />
+        
+        {/* Event Streams (Redpanda) */}
+        <Route path="/streams" element={<StreamsDashboardPage />} />
+        <Route path="/streams/:topic" element={<TopicDetailPage />} />
+        
+        {/* API Explorer (Hasura) */}
+        <Route path="/api" element={<HasuraConsolePage />} />
+        
+        {/* Analytics (Superset) */}
+        <Route path="/analytics" element={<SupersetDashboardPage />} />
+        
+        {/* Software Catalog */}
+        <Route path="/catalog" element={<CatalogIndexPage />} />
+        <Route path="/catalog/:kind/:namespace/:name" element={<CatalogEntityPage />} />
+        
+        {/* Templates */}
+        <Route path="/create" element={<ScaffolderPage />} />
+        
+        {/* Settings */}
+        <Route path="/settings" element={<SettingsPage />} />
+      </Routes>
+    );
+
+  # Navigation Sidebar
+  Sidebar.tsx: |
+    import React from 'react';
+    import {
+      Sidebar,
+      SidebarItem,
+      SidebarDivider,
+      SidebarSpace,
+      SidebarGroup,
+    } from '@backstage/core-components';
+    import {
+      HomeIcon,
+      BuildIcon,
+      CloudIcon,
+      StorageIcon,
+      TimelineIcon,
+      StreamIcon,
+      CodeIcon,
+      SettingsIcon,
+      CreateIcon,
+      SearchIcon,
+    } from '@material-ui/icons';
+    
+    export const AppSidebar = () => (
+      <Sidebar>
+        <SidebarGroup label="Menu">
+          <SidebarItem icon={HomeIcon} to="/" text="Home" />
+          <SidebarItem icon={SearchIcon} to="/search" text="Search" />
+        </SidebarGroup>
+        
+        <SidebarDivider />
+        
+        <SidebarGroup label="Deployment">
+          <SidebarItem icon={BuildIcon} to="/builds" text="Builds" />
+          <SidebarItem icon={CloudIcon} to="/gitops" text="GitOps" />
+        </SidebarGroup>
+        
+        <SidebarGroup label="Infrastructure">
+          <SidebarItem icon={StorageIcon} to="/databases" text="Databases" />
+          <SidebarItem icon={StreamIcon} to="/streams" text="Streams" />
+        </SidebarGroup>
+        
+        <SidebarGroup label="Observability">
+          <SidebarItem icon={TimelineIcon} to="/monitoring" text="Monitoring" />
+          <SidebarItem icon={CodeIcon} to="/api" text="API Explorer" />
+        </SidebarGroup>
+        
+        <SidebarSpace />
+        
+        <SidebarGroup label="Admin">
+          <SidebarItem icon={CreateIcon} to="/create" text="Create" />
+          <SidebarItem icon={SettingsIcon} to="/settings" text="Settings" />
+        </SidebarGroup>
+      </Sidebar>
+    );

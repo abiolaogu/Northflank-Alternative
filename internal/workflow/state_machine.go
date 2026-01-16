@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/openpaas/platform-orchestrator/internal/domain"
-	"github.com/openpaas/platform-orchestrator/pkg/logger"
+	"github.com/northstack/platform/internal/domain"
+	"github.com/northstack/platform/pkg/logger"
 )
 
 // DeploymentState represents the current state of a deployment workflow

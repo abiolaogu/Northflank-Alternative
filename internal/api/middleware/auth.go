@@ -9,10 +9,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/openpaas/platform-orchestrator/internal/config"
-	"github.com/openpaas/platform-orchestrator/internal/domain"
-	"github.com/openpaas/platform-orchestrator/pkg/errors"
-	"github.com/openpaas/platform-orchestrator/pkg/logger"
+	"github.com/northstack/platform/internal/config"
+	"github.com/northstack/platform/internal/domain"
+	"github.com/northstack/platform/pkg/errors"
+	"github.com/northstack/platform/pkg/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 

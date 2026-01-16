@@ -79,11 +79,11 @@ type ResourceLimits struct {
 
 // ScalingConfig defines how a service should scale
 type ScalingConfig struct {
-	MinReplicas     int32  `json:"min_replicas"`
-	MaxReplicas     int32  `json:"max_replicas"`
-	TargetCPU       int32  `json:"target_cpu,omitempty"`
-	TargetMemory    int32  `json:"target_memory,omitempty"`
-	ScaleDownDelay  int32  `json:"scale_down_delay,omitempty"`
+	MinReplicas          int32 `json:"min_replicas"`
+	MaxReplicas          int32 `json:"max_replicas"`
+	TargetCPU            int32 `json:"target_cpu,omitempty"`
+	TargetMemory         int32 `json:"target_memory,omitempty"`
+	ScaleDownDelay       int32 `json:"scale_down_delay,omitempty"`
 	ScaleUpStabilization int32 `json:"scale_up_stabilization,omitempty"`
 }
 
@@ -210,13 +210,13 @@ type Deployment struct {
 type ClusterProvider string
 
 const (
-	ClusterProviderAWS         ClusterProvider = "aws"
-	ClusterProviderGCP         ClusterProvider = "gcp"
-	ClusterProviderAzure       ClusterProvider = "azure"
+	ClusterProviderAWS          ClusterProvider = "aws"
+	ClusterProviderGCP          ClusterProvider = "gcp"
+	ClusterProviderAzure        ClusterProvider = "azure"
 	ClusterProviderDigitalOcean ClusterProvider = "digitalocean"
-	ClusterProviderLinode      ClusterProvider = "linode"
-	ClusterProviderOnPrem      ClusterProvider = "on_prem"
-	ClusterProviderK3s         ClusterProvider = "k3s"
+	ClusterProviderLinode       ClusterProvider = "linode"
+	ClusterProviderOnPrem       ClusterProvider = "on_prem"
+	ClusterProviderK3s          ClusterProvider = "k3s"
 )
 
 // ClusterStatus represents the current state of a cluster
@@ -232,20 +232,20 @@ const (
 
 // Cluster represents a Kubernetes cluster managed by the platform
 type Cluster struct {
-	ID             uuid.UUID              `json:"id"`
-	Name           string                 `json:"name"`
-	Slug           string                 `json:"slug"`
-	Provider       ClusterProvider        `json:"provider"`
-	Region         string                 `json:"region"`
-	Status         ClusterStatus          `json:"status"`
-	KubeVersion    string                 `json:"kube_version"`
-	APIEndpoint    string                 `json:"api_endpoint,omitempty"`
-	NodeCount      int32                  `json:"node_count"`
-	Labels         map[string]string      `json:"labels,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
-	RancherClusterID string               `json:"rancher_cluster_id,omitempty"`
-	CreatedAt      time.Time              `json:"created_at"`
-	UpdatedAt      time.Time              `json:"updated_at"`
+	ID               uuid.UUID              `json:"id"`
+	Name             string                 `json:"name"`
+	Slug             string                 `json:"slug"`
+	Provider         ClusterProvider        `json:"provider"`
+	Region           string                 `json:"region"`
+	Status           ClusterStatus          `json:"status"`
+	KubeVersion      string                 `json:"kube_version"`
+	APIEndpoint      string                 `json:"api_endpoint,omitempty"`
+	NodeCount        int32                  `json:"node_count"`
+	Labels           map[string]string      `json:"labels,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	RancherClusterID string                 `json:"rancher_cluster_id,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
 }
 
 // EnvironmentType represents the type of environment
@@ -260,43 +260,43 @@ const (
 
 // Environment represents a deployment environment (dev, staging, prod, etc.)
 type Environment struct {
-	ID          uuid.UUID              `json:"id"`
-	ProjectID   uuid.UUID              `json:"project_id"`
-	ClusterID   uuid.UUID              `json:"cluster_id"`
-	Name        string                 `json:"name"`
-	Slug        string                 `json:"slug"`
-	Type        EnvironmentType        `json:"type"`
-	Namespace   string                 `json:"namespace"`
-	IsDefault   bool                   `json:"is_default"`
-	Labels      map[string]string      `json:"labels,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ID        uuid.UUID              `json:"id"`
+	ProjectID uuid.UUID              `json:"project_id"`
+	ClusterID uuid.UUID              `json:"cluster_id"`
+	Name      string                 `json:"name"`
+	Slug      string                 `json:"slug"`
+	Type      EnvironmentType        `json:"type"`
+	Namespace string                 `json:"namespace"`
+	IsDefault bool                   `json:"is_default"`
+	Labels    map[string]string      `json:"labels,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt time.Time              `json:"created_at"`
+	UpdatedAt time.Time              `json:"updated_at"`
 }
 
 // SecretType represents the type of secret
 type SecretType string
 
 const (
-	SecretTypeOpaque    SecretType = "opaque"
-	SecretTypeTLS       SecretType = "tls"
+	SecretTypeOpaque       SecretType = "opaque"
+	SecretTypeTLS          SecretType = "tls"
 	SecretTypeDockerConfig SecretType = "docker_config"
-	SecretTypeSSHAuth   SecretType = "ssh_auth"
-	SecretTypeBasicAuth SecretType = "basic_auth"
+	SecretTypeSSHAuth      SecretType = "ssh_auth"
+	SecretTypeBasicAuth    SecretType = "basic_auth"
 )
 
 // Secret represents a secret managed by the platform (stored in Vault)
 type Secret struct {
-	ID           uuid.UUID         `json:"id"`
-	ProjectID    uuid.UUID         `json:"project_id"`
-	Name         string            `json:"name"`
-	Type         SecretType        `json:"type"`
-	Keys         []string          `json:"keys"` // Only store key names, not values
-	VaultPath    string            `json:"vault_path"`
-	Version      int               `json:"version"`
-	Labels       map[string]string `json:"labels,omitempty"`
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
+	ID        uuid.UUID         `json:"id"`
+	ProjectID uuid.UUID         `json:"project_id"`
+	Name      string            `json:"name"`
+	Type      SecretType        `json:"type"`
+	Keys      []string          `json:"keys"` // Only store key names, not values
+	VaultPath string            `json:"vault_path"`
+	Version   int               `json:"version"`
+	Labels    map[string]string `json:"labels,omitempty"`
+	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
 }
 
 // IngressType represents the type of ingress
@@ -352,30 +352,40 @@ type PipelineStage struct {
 
 // Pipeline represents a CI/CD pipeline run
 type Pipeline struct {
-	ID          uuid.UUID              `json:"id"`
-	ServiceID   uuid.UUID              `json:"service_id"`
-	ProjectID   uuid.UUID              `json:"project_id"`
-	Status      PipelineStatus         `json:"status"`
-	Trigger     string                 `json:"trigger"` // "push", "pr", "manual", "schedule"
-	Branch      string                 `json:"branch"`
-	CommitSHA   string                 `json:"commit_sha"`
-	Stages      []PipelineStage        `json:"stages"`
-	BuildID     *uuid.UUID             `json:"build_id,omitempty"`
-	DeploymentID *uuid.UUID            `json:"deployment_id,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	StartedAt   *time.Time             `json:"started_at,omitempty"`
-	CompletedAt *time.Time             `json:"completed_at,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
+	ID           uuid.UUID              `json:"id"`
+	ServiceID    uuid.UUID              `json:"service_id"`
+	ProjectID    uuid.UUID              `json:"project_id"`
+	Status       PipelineStatus         `json:"status"`
+	Trigger      string                 `json:"trigger"` // "push", "pr", "manual", "schedule"
+	Branch       string                 `json:"branch"`
+	CommitSHA    string                 `json:"commit_sha"`
+	Stages       []PipelineStage        `json:"stages"`
+	BuildID      *uuid.UUID             `json:"build_id,omitempty"`
+	DeploymentID *uuid.UUID             `json:"deployment_id,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	StartedAt    *time.Time             `json:"started_at,omitempty"`
+	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
+	CreatedAt    time.Time              `json:"created_at"`
 }
 
 // UserRole represents the role of a user
 type UserRole string
 
 const (
-	UserRoleAdmin   UserRole = "admin"
-	UserRoleOwner   UserRole = "owner"
-	UserRoleMember  UserRole = "member"
-	UserRoleViewer  UserRole = "viewer"
+	UserRoleAdmin  UserRole = "admin"
+	UserRoleOwner  UserRole = "owner"
+	UserRoleMember UserRole = "member"
+	UserRoleViewer UserRole = "viewer"
+)
+
+// UserStatus represents the status of a user account
+type UserStatus string
+
+const (
+	UserStatusActive    UserStatus = "active"
+	UserStatusInactive  UserStatus = "inactive"
+	UserStatusPending   UserStatus = "pending"
+	UserStatusSuspended UserStatus = "suspended"
 )
 
 // User represents a platform user
@@ -383,10 +393,12 @@ type User struct {
 	ID           uuid.UUID         `json:"id"`
 	Email        string            `json:"email"`
 	Name         string            `json:"name"`
+	PasswordHash string            `json:"-"` // Never expose in JSON
 	AvatarURL    string            `json:"avatar_url,omitempty"`
 	Role         UserRole          `json:"role"`
+	Status       UserStatus        `json:"status"`
 	IsActive     bool              `json:"is_active"`
-	LastLoginAt  *time.Time        `json:"last_login_at,omitempty"`
+	LastLoginAt  time.Time         `json:"last_login_at,omitempty"`
 	Labels       map[string]string `json:"labels,omitempty"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`

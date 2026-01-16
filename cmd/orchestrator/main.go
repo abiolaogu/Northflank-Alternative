@@ -12,16 +12,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/openpaas/platform-orchestrator/internal/adapters/argocd"
-	"github.com/openpaas/platform-orchestrator/internal/adapters/coolify"
-	"github.com/openpaas/platform-orchestrator/internal/adapters/rancher"
-	"github.com/openpaas/platform-orchestrator/internal/api"
-	"github.com/openpaas/platform-orchestrator/internal/config"
-	"github.com/openpaas/platform-orchestrator/internal/domain"
-	"github.com/openpaas/platform-orchestrator/internal/eventbus"
-	"github.com/openpaas/platform-orchestrator/internal/repository"
-	"github.com/openpaas/platform-orchestrator/internal/workflow"
-	"github.com/openpaas/platform-orchestrator/pkg/logger"
+	"github.com/northstack/platform/internal/adapters/argocd"
+	"github.com/northstack/platform/internal/adapters/coolify"
+	"github.com/northstack/platform/internal/adapters/rancher"
+	"github.com/northstack/platform/internal/api"
+	"github.com/northstack/platform/internal/config"
+	"github.com/northstack/platform/internal/domain"
+	"github.com/northstack/platform/internal/eventbus"
+	"github.com/northstack/platform/internal/repository"
+	"github.com/northstack/platform/internal/workflow"
+	"github.com/northstack/platform/pkg/logger"
 )
 
 var (
@@ -53,10 +53,14 @@ func main() {
 	}
 
 	// Initialize logger
-	log := logger.New(cfg.Logging.Level, cfg.Logging.Format, os.Stdout)
+	log := logger.New(
+		cfg.Observability.Logging.Level,
+		cfg.Observability.Logging.Format,
+		os.Stdout,
+	)
 	log.Info().
 		Str("version", version).
-		Str("environment", cfg.Logging.Level).
+		Str("environment", cfg.Observability.Logging.Level).
 		Msg("Starting Platform Orchestrator")
 
 	// Create root context
@@ -94,12 +98,12 @@ func main() {
 	defer bus.Close()
 
 	// Initialize adapters
-	coolifyAdapter := coolify.NewAdapter(&cfg.Coolify, log)
-	rancherAdapter := rancher.NewAdapter(&cfg.Rancher, log)
-	argocdAdapter := argocd.NewAdapter(&cfg.ArgoCD, log)
+	coolifyAdapter := coolify.NewAdapter(&cfg.Integrations.Coolify, log)
+	rancherAdapter := rancher.NewAdapter(&cfg.Integrations.Rancher, log)
+	argocdAdapter := argocd.NewAdapter(&cfg.Integrations.ArgoCD, log)
 
 	// Authenticate with ArgoCD if configured
-	if cfg.ArgoCD.Username != "" || cfg.ArgoCD.Token != "" {
+	if cfg.Integrations.ArgoCD.Username != "" || cfg.Integrations.ArgoCD.Token != "" {
 		if err := argocdAdapter.Authenticate(ctx); err != nil {
 			log.Warn().Err(err).Msg("Failed to authenticate with ArgoCD")
 		}
@@ -135,11 +139,14 @@ func main() {
 		bus,
 		coolifyAdapter,
 	)
+
+	// Suppress unused warning
+	_ = rancherAdapter
 	engine := router.Setup()
 
 	// Create HTTP server
 	srv := &http.Server{
-		Addr:         cfg.Server.GetAddress(),
+		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
 		Handler:      engine,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
@@ -202,6 +209,3 @@ func setupEventSubscriptions(ctx context.Context, bus *eventbus.NATSEventBus, sm
 		return nil
 	})
 }
-
-// Suppress unused import warning
-var _ = rancherAdapter

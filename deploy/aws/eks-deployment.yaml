@@ -1,0 +1,183 @@
+# NorthStack Platform - AWS EKS Deployment
+# Amazon Elastic Kubernetes Service
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack
+  labels:
+    app.kubernetes.io/name: northstack
+    app.kubernetes.io/managed-by: aws-eks
+
+---
+# StorageClass for EBS
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: northstack-ebs-gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+  encrypted: "true"
+  kmsKeyId: alias/aws/ebs
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+# API Deployment with AWS-specific configs
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    eks.amazonaws.com/compute-type: ec2
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: northstack-api
+  template:
+    metadata:
+      labels:
+        app: northstack-api
+      annotations:
+        iam.amazonaws.com/role: northstack-api-role
+    spec:
+      serviceAccountName: northstack-api
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: northstack-api
+      containers:
+        - name: api
+          image: ghcr.io/northstack/platform:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: AWS_REGION
+              value: us-east-1
+            - name: ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: northstack-secrets
+                  key: database-url
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# AWS ALB Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT_ID
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/healthcheck-path: /health/ready
+    alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:us-east-1:ACCOUNT:regional/webacl/northstack-waf/ID
+spec:
+  rules:
+    - host: api.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: northstack-api
+                port:
+                  number: 8080
+
+---
+# Service Account with IRSA
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/northstack-api-role
+
+---
+# ExternalSecret (AWS Secrets Manager)
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: northstack-secrets
+  namespace: northstack
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: ClusterSecretStore
+  target:
+    name: northstack-secrets
+  data:
+    - secretKey: database-url
+      remoteRef:
+        key: northstack/production
+        property: database_url
+    - secretKey: jwt-secret
+      remoteRef:
+        key: northstack/production
+        property: jwt_secret
+
+---
+# Karpenter Provisioner
+apiVersion: karpenter.sh/v1alpha5
+kind: Provisioner
+metadata:
+  name: northstack
+spec:
+  requirements:
+    - key: karpenter.sh/capacity-type
+      operator: In
+      values: ["spot", "on-demand"]
+    - key: kubernetes.io/arch
+      operator: In
+      values: ["amd64", "arm64"]
+    - key: topology.kubernetes.io/zone
+      operator: In
+      values: ["us-east-1a", "us-east-1b", "us-east-1c"]
+  limits:
+    resources:
+      cpu: 1000
+      memory: 1000Gi
+  providerRef:
+    name: default
+  ttlSecondsAfterEmpty: 30

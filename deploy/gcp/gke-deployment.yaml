@@ -1,0 +1,201 @@
+# NorthStack Platform - Google Cloud GKE Deployment
+# Google Kubernetes Engine
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack
+  labels:
+    app.kubernetes.io/name: northstack
+    app.kubernetes.io/managed-by: gke
+
+---
+# StorageClass for GCP PD
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: northstack-pd-ssd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-ssd
+  replication-type: regional-pd
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+# API Deployment with GKE-specific configs
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    autopilot.gke.io/resource-adjustment: '{"container":{"limits":true}}'
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: northstack-api
+  template:
+    metadata:
+      labels:
+        app: northstack-api
+    spec:
+      serviceAccountName: northstack-api
+      nodeSelector:
+        cloud.google.com/gke-spot: "true"
+      tolerations:
+        - key: cloud.google.com/gke-spot
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: northstack-api
+      containers:
+        - name: api
+          image: ghcr.io/northstack/platform:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GCP_PROJECT
+              value: northstack-prod
+            - name: ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: northstack-secrets
+                  key: database-url
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+              ephemeral-storage: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+              ephemeral-storage: "5Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# GKE Gateway API
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: northstack-gateway
+  namespace: northstack
+  annotations:
+    networking.gke.io/certmap: northstack-cert-map
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: northstack-tls
+  addresses:
+    - type: NamedAddress
+      value: northstack-global-ip
+
+---
+# HTTPRoute
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: northstack-api
+  namespace: northstack
+spec:
+  parentRefs:
+    - name: northstack-gateway
+  hostnames:
+    - api.northstack.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: northstack-api
+          port: 8080
+
+---
+# Service Account with Workload Identity
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    iam.gke.io/gcp-service-account: northstack-api@northstack-prod.iam.gserviceaccount.com
+
+---
+# BackendConfig for health checks
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: northstack-api
+  namespace: northstack
+spec:
+  healthCheck:
+    checkIntervalSec: 15
+    timeoutSec: 5
+    healthyThreshold: 1
+    unhealthyThreshold: 2
+    type: HTTP
+    requestPath: /health/ready
+    port: 8080
+  cdn:
+    enabled: false
+  securityPolicy:
+    name: northstack-armor-policy
+
+---
+# Cloud Armor Security Policy
+apiVersion: compute.cnrm.cloud.google.com/v1beta1
+kind: ComputeSecurityPolicy
+metadata:
+  name: northstack-armor-policy
+  namespace: northstack
+spec:
+  description: NorthStack API security policy
+  rule:
+    - action: allow
+      priority: 1000
+      match:
+        versionedExpr: SRC_IPS_V1
+        config:
+          srcIpRanges:
+            - "*"
+      description: Allow all traffic (customize for production)
+    - action: deny(403)
+      priority: 2147483647
+      match:
+        versionedExpr: SRC_IPS_V1
+        config:
+          srcIpRanges:
+            - "*"
+      description: Default deny

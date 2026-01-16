@@ -1,0 +1,189 @@
+# NorthStack Platform - OpenStack Deployment
+# OpenStack Magnum Kubernetes
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack
+  labels:
+    app.kubernetes.io/name: northstack
+    app.kubernetes.io/managed-by: openstack-magnum
+
+---
+# StorageClass for Cinder
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: northstack-cinder
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: cinder.csi.openstack.org
+parameters:
+  availability: nova
+  type: ssd
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+# API Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: northstack-api
+  namespace: northstack
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: northstack-api
+  template:
+    metadata:
+      labels:
+        app: northstack-api
+    spec:
+      serviceAccountName: northstack-api
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: northstack-api
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: api
+          image: ghcr.io/northstack/platform:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: northstack-secrets
+                  key: database-url
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# Service with Octavia LoadBalancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    loadbalancer.openstack.org/floating-network-id: "FLOATING_NETWORK_ID"
+    loadbalancer.openstack.org/keep-floatingip: "true"
+    loadbalancer.openstack.org/proxy-protocol: "true"
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 443
+      targetPort: 8080
+      protocol: TCP
+      name: https
+  selector:
+    app: northstack-api
+
+---
+# Ingress with Nginx
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+    - hosts:
+        - api.northstack.io
+      secretName: northstack-tls
+  rules:
+    - host: api.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: northstack-api
+                port:
+                  number: 8080
+
+---
+# Barbican ExternalSecret
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: northstack-secrets
+  namespace: northstack
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: openstack-barbican
+    kind: ClusterSecretStore
+  target:
+    name: northstack-secrets
+  data:
+    - secretKey: database-url
+      remoteRef:
+        key: northstack/database-url
+    - secretKey: jwt-secret
+      remoteRef:
+        key: northstack/jwt-secret
+
+---
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: northstack-api
+  namespace: northstack
+
+---
+# HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: northstack-api
+  namespace: northstack
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: northstack-api
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

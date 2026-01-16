@@ -1,0 +1,205 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack-database
+  labels:
+    app.kubernetes.io/name: yugabytedb
+    northstack.io/managed: "true"
+
+---
+apiVersion: yugabyte.com/v1alpha1
+kind: YBCluster
+metadata:
+  name: northstack-yugabyte
+  namespace: northstack-database
+  labels:
+    app.kubernetes.io/name: yugabytedb
+    app.kubernetes.io/component: database
+    northstack.io/tier: production
+spec:
+  image:
+    repository: yugabytedb/yugabyte
+    tag: "2.20.1.0-b97"
+    pullPolicy: IfNotPresent
+
+  # TServer configuration (data nodes)
+  tserver:
+    replicas: 3
+    storage:
+      count: 1
+      size: 100Gi
+      storageClass: fast-ssd
+    resource:
+      requests:
+        cpu: "2"
+        memory: "4Gi"
+      limits:
+        cpu: "4"
+        memory: "8Gi"
+    gflags:
+      # Performance tuning
+      rocksdb_compact_flush_rate_limit_bytes_per_sec: "268435456"
+      rocksdb_universal_compaction_min_merge_width: "4"
+      # Connection settings
+      ysql_max_connections: "300"
+      # Enable YSQL (PostgreSQL-compatible)
+      enable_ysql: "true"
+      # Security
+      use_cassandra_authentication: "true"
+      ysql_enable_auth: "true"
+
+  # Master configuration (metadata nodes)
+  master:
+    replicas: 3
+    storage:
+      count: 1
+      size: 10Gi
+      storageClass: fast-ssd
+    resource:
+      requests:
+        cpu: "1"
+        memory: "2Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    gflags:
+      # Replication factor
+      replication_factor: "3"
+      # Enable read replicas
+      enable_load_balancing: "true"
+
+  # Enable TLS
+  tls:
+    enabled: true
+    rootCA:
+      cert: ""
+      key: ""
+    # Auto-generate certificates
+    # For production, use cert-manager or external CA
+
+  # Backup configuration
+  enableBackup: true
+  backupLocation:
+    type: s3
+    s3:
+      bucket: northstack-yugabyte-backups
+      endpoint: http://minio.northstack-storage.svc:9000
+      accessKeySecretName: yugabyte-backup-creds
+      secretKeySecretName: yugabyte-backup-creds
+
+  # Pod affinity for HA
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app: yb-tserver
+            topologyKey: kubernetes.io/hostname
+
+  # Tolerations for dedicated database nodes
+  tolerations:
+    - key: "database"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+
+---
+# Service for YSQL (PostgreSQL-compatible) connections
+apiVersion: v1
+kind: Service
+metadata:
+  name: yugabyte-ysql
+  namespace: northstack-database
+  labels:
+    app.kubernetes.io/name: yugabytedb
+    northstack.io/service-type: database
+spec:
+  type: ClusterIP
+  ports:
+    - name: ysql
+      port: 5433
+      targetPort: 5433
+      protocol: TCP
+  selector:
+    app: yb-tserver
+
+---
+# Service for YCQL (Cassandra-compatible) connections
+apiVersion: v1
+kind: Service
+metadata:
+  name: yugabyte-ycql
+  namespace: northstack-database
+spec:
+  type: ClusterIP
+  ports:
+    - name: ycql
+      port: 9042
+      targetPort: 9042
+      protocol: TCP
+  selector:
+    app: yb-tserver
+
+---
+# Service for Master UI
+apiVersion: v1
+kind: Service
+metadata:
+  name: yugabyte-master-ui
+  namespace: northstack-database
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 7000
+      targetPort: 7000
+  selector:
+    app: yb-master
+
+---
+# ServiceMonitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: yugabyte-metrics
+  namespace: northstack-database
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: yugabytedb
+  endpoints:
+    - port: http-ui
+      interval: 30s
+      path: /prometheus-metrics
+  namespaceSelector:
+    matchNames:
+      - northstack-database
+
+---
+# Credentials secret (use external secrets operator in production)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: yugabyte-credentials
+  namespace: northstack-database
+type: Opaque
+stringData:
+  username: northstack
+  password: CHANGE_ME_IN_PRODUCTION
+  database: northstack
+
+---
+# Backup credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: yugabyte-backup-creds
+  namespace: northstack-database
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: minioadmin
+  AWS_SECRET_ACCESS_KEY: minioadmin

@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/openpaas/platform-orchestrator/pkg/errors"
+	"github.com/northstack/platform/pkg/errors"
 )
 
 // ErrorResponse represents an error response

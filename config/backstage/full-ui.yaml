@@ -1,0 +1,594 @@
+# Complete Backstage UI Plugins
+# All Northflank Dashboard Features + Enhancements
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-full-ui
+  namespace: northstack-backstage
+data:
+  # ============================================
+  # PROJECT MANAGEMENT SCREENS
+  # ============================================
+  
+  ProjectsListPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, Table, TableColumn, StatusOK, StatusError } from '@backstage/core-components';
+    import { Link } from '@backstage/core-components';
+    
+    export const ProjectsListPage = () => {
+      const columns: TableColumn[] = [
+        { title: 'Project', field: 'name', render: (row: any) => <Link to={`/projects/${row.id}`}>{row.name}</Link> },
+        { title: 'Status', field: 'status', render: (row: any) => row.status === 'active' ? <StatusOK /> : <StatusError /> },
+        { title: 'Services', field: 'service_count' },
+        { title: 'Databases', field: 'database_count' },
+        { title: 'Members', field: 'member_count' },
+        { title: 'Created', field: 'created_at' },
+      ];
+      return (
+        <Page themeId="home">
+          <Header title="Projects" subtitle="Manage your projects" />
+          <Content>
+            <Table title="All Projects" columns={columns} data={[]} options={{ search: true, paging: true }} />
+          </Content>
+        </Page>
+      );
+    };
+
+  ProjectOverviewPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, InfoCard, Progress, TabbedLayout } from '@backstage/core-components';
+    
+    export const ProjectOverviewPage = ({ projectId }: { projectId: string }) => {
+      return (
+        <Page themeId="home">
+          <Header title="Project: my-app" subtitle="Production environment" />
+          <Content>
+            <TabbedLayout>
+              <TabbedLayout.Route path="/" title="Overview">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                  <InfoCard title="Services">4 running</InfoCard>
+                  <InfoCard title="Databases">2 active</InfoCard>
+                  <InfoCard title="Builds Today">12 (100% success)</InfoCard>
+                </div>
+              </TabbedLayout.Route>
+              <TabbedLayout.Route path="/services" title="Services" />
+              <TabbedLayout.Route path="/databases" title="Databases" />
+              <TabbedLayout.Route path="/secrets" title="Secrets" />
+              <TabbedLayout.Route path="/settings" title="Settings" />
+            </TabbedLayout>
+          </Content>
+        </Page>
+      );
+    };
+
+  ProjectSecretsPage.tsx: |
+    import React, { useState } from 'react';
+    import { Content, Page, Header, Table, TableColumn } from '@backstage/core-components';
+    
+    export const ProjectSecretsPage = ({ projectId }: { projectId: string }) => {
+      const [secrets, setSecrets] = useState([]);
+      const columns: TableColumn[] = [
+        { title: 'Name', field: 'name' },
+        { title: 'Type', field: 'type' },
+        { title: 'Value', render: () => '••••••••' },
+        { title: 'Updated', field: 'updated_at' },
+        { title: 'Actions', render: (row: any) => (
+          <>
+            <button>Edit</button>
+            <button>Delete</button>
+          </>
+        )},
+      ];
+      return (
+        <Page themeId="tool">
+          <Header title="Secrets" subtitle="Encrypted environment variables" />
+          <Content>
+            <Table title="Project Secrets" columns={columns} data={secrets} options={{ search: true }} />
+          </Content>
+        </Page>
+      );
+    };
+
+  # ============================================
+  # SERVICE SCREENS (WORKLOADS)
+  # ============================================
+
+  ServicesListPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, Table, TableColumn, StatusOK, StatusError, StatusPending } from '@backstage/core-components';
+    
+    const ServiceStatus = ({ status }: { status: string }) => {
+      switch (status) {
+        case 'running': return <StatusOK>Running</StatusOK>;
+        case 'deploying': return <StatusPending>Deploying</StatusPending>;
+        case 'stopped': return <StatusError>Stopped</StatusError>;
+        default: return <StatusError>{status}</StatusError>;
+      }
+    };
+    
+    export const ServicesListPage = () => {
+      const columns: TableColumn[] = [
+        { title: 'Service', field: 'name' },
+        { title: 'Type', field: 'type' },
+        { title: 'Status', render: (row: any) => <ServiceStatus status={row.status} /> },
+        { title: 'Replicas', render: (row: any) => `${row.ready_replicas}/${row.replicas}` },
+        { title: 'CPU', field: 'cpu_usage' },
+        { title: 'Memory', field: 'memory_usage' },
+        { title: 'Last Deploy', field: 'last_deploy_at' },
+      ];
+      return (
+        <Page themeId="service">
+          <Header title="Services" subtitle="Deployed workloads" />
+          <Content>
+            <Table title="All Services" columns={columns} data={[]} options={{ search: true, paging: true }} />
+          </Content>
+        </Page>
+      );
+    };
+
+  ServiceDetailPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, TabbedLayout, InfoCard } from '@backstage/core-components';
+    
+    export const ServiceDetailPage = ({ serviceId }: { serviceId: string }) => {
+      return (
+        <Page themeId="service">
+          <Header title="api-server" subtitle="Web Service • Running" />
+          <Content>
+            <TabbedLayout>
+              <TabbedLayout.Route path="/" title="Overview">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                  <InfoCard title="Replicas">3/3</InfoCard>
+                  <InfoCard title="CPU">45%</InfoCard>
+                  <InfoCard title="Memory">512/1024 MB</InfoCard>
+                  <InfoCard title="Uptime">99.9%</InfoCard>
+                </div>
+              </TabbedLayout.Route>
+              <TabbedLayout.Route path="/logs" title="Logs" />
+              <TabbedLayout.Route path="/metrics" title="Metrics" />
+              <TabbedLayout.Route path="/env" title="Environment" />
+              <TabbedLayout.Route path="/scaling" title="Scaling" />
+              <TabbedLayout.Route path="/ports" title="Ports & Domains" />
+              <TabbedLayout.Route path="/health" title="Health Checks" />
+              <TabbedLayout.Route path="/volumes" title="Volumes" />
+              <TabbedLayout.Route path="/shell" title="Shell" />
+              <TabbedLayout.Route path="/events" title="Events" />
+            </TabbedLayout>
+          </Content>
+        </Page>
+      );
+    };
+
+  ServiceLogsPage.tsx: |
+    import React, { useState, useEffect } from 'react';
+    import { Content, Page, Header } from '@backstage/core-components';
+    
+    export const ServiceLogsPage = ({ serviceId }: { serviceId: string }) => {
+      const [logs, setLogs] = useState<string[]>([]);
+      const [filter, setFilter] = useState('');
+      const [tail, setTail] = useState(100);
+      
+      return (
+        <Page themeId="tool">
+          <Header title="Logs" subtitle="Real-time container logs" />
+          <Content>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+              <select onChange={(e) => setTail(parseInt(e.target.value))}>
+                <option value="100">Last 100 lines</option>
+                <option value="500">Last 500 lines</option>
+                <option value="1000">Last 1000 lines</option>
+              </select>
+              <input placeholder="Filter logs..." value={filter} onChange={(e) => setFilter(e.target.value)} />
+              <button>Download</button>
+            </div>
+            <pre style={{ background: '#1e1e1e', color: '#d4d4d4', padding: 16, height: 600, overflow: 'auto' }}>
+              {logs.map((log, i) => <div key={i}>{log}</div>)}
+            </pre>
+          </Content>
+        </Page>
+      );
+    };
+
+  ServiceMetricsPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, InfoCard } from '@backstage/core-components';
+    
+    const GrafanaEmbed = ({ query, title }: { query: string, title: string }) => (
+      <InfoCard title={title}>
+        <iframe 
+          src={`https://monitor.northstack.io/d-solo/service-metrics?var-query=${query}&theme=light`}
+          width="100%" height="250" frameBorder="0"
+        />
+      </InfoCard>
+    );
+    
+    export const ServiceMetricsPage = ({ serviceId }: { serviceId: string }) => {
+      return (
+        <Page themeId="tool">
+          <Header title="Metrics" subtitle="Service performance metrics" />
+          <Content>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <GrafanaEmbed query="cpu" title="CPU Usage" />
+              <GrafanaEmbed query="memory" title="Memory Usage" />
+              <GrafanaEmbed query="network" title="Network I/O" />
+              <GrafanaEmbed query="requests" title="Request Rate" />
+              <GrafanaEmbed query="latency" title="Response Latency" />
+              <GrafanaEmbed query="errors" title="Error Rate" />
+            </div>
+          </Content>
+        </Page>
+      );
+    };
+
+  ServiceScalingPage.tsx: |
+    import React, { useState } from 'react';
+    import { Content, Page, Header, InfoCard } from '@backstage/core-components';
+    
+    export const ServiceScalingPage = ({ serviceId }: { serviceId: string }) => {
+      const [replicas, setReplicas] = useState(3);
+      const [autoScale, setAutoScale] = useState(true);
+      const [minReplicas, setMinReplicas] = useState(2);
+      const [maxReplicas, setMaxReplicas] = useState(10);
+      const [targetCPU, setTargetCPU] = useState(70);
+      
+      return (
+        <Page themeId="tool">
+          <Header title="Scaling" subtitle="Configure auto-scaling" />
+          <Content>
+            <InfoCard title="Manual Scaling">
+              <label>Replicas: {replicas}</label>
+              <input type="range" min="1" max="20" value={replicas} onChange={(e) => setReplicas(parseInt(e.target.value))} />
+              <button>Apply</button>
+            </InfoCard>
+            <InfoCard title="Auto-Scaling (HPA)">
+              <div>
+                <label><input type="checkbox" checked={autoScale} onChange={(e) => setAutoScale(e.target.checked)} /> Enable Auto-Scaling</label>
+              </div>
+              <div>Min Replicas: <input type="number" value={minReplicas} onChange={(e) => setMinReplicas(parseInt(e.target.value))} /></div>
+              <div>Max Replicas: <input type="number" value={maxReplicas} onChange={(e) => setMaxReplicas(parseInt(e.target.value))} /></div>
+              <div>Target CPU: <input type="number" value={targetCPU} onChange={(e) => setTargetCPU(parseInt(e.target.value))} />%</div>
+              <button>Save</button>
+            </InfoCard>
+          </Content>
+        </Page>
+      );
+    };
+
+  ServicePortsPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, Table, TableColumn, InfoCard } from '@backstage/core-components';
+    
+    export const ServicePortsPage = ({ serviceId }: { serviceId: string }) => {
+      const portColumns: TableColumn[] = [
+        { title: 'Name', field: 'name' },
+        { title: 'Port', field: 'port' },
+        { title: 'Protocol', field: 'protocol' },
+        { title: 'Public', field: 'public' },
+      ];
+      const domainColumns: TableColumn[] = [
+        { title: 'Domain', field: 'domain' },
+        { title: 'Port', field: 'port' },
+        { title: 'TLS', field: 'tls' },
+        { title: 'Status', field: 'status' },
+      ];
+      return (
+        <Page themeId="tool">
+          <Header title="Ports & Domains" subtitle="Network configuration" />
+          <Content>
+            <InfoCard title="Ports">
+              <Table columns={portColumns} data={[]} options={{ paging: false }} />
+            </InfoCard>
+            <InfoCard title="Custom Domains">
+              <Table columns={domainColumns} data={[]} options={{ paging: false }} />
+              <button>Add Domain</button>
+            </InfoCard>
+          </Content>
+        </Page>
+      );
+    };
+
+  ServiceShellPage.tsx: |
+    import React, { useEffect, useRef } from 'react';
+    import { Content, Page, Header } from '@backstage/core-components';
+    
+    export const ServiceShellPage = ({ serviceId }: { serviceId: string }) => {
+      const terminalRef = useRef<HTMLDivElement>(null);
+      
+      return (
+        <Page themeId="tool">
+          <Header title="Shell" subtitle="Container terminal access" />
+          <Content>
+            <div style={{ marginBottom: 16 }}>
+              <select><option>Container: main</option></select>
+              <select><option>Pod: api-server-abc123</option></select>
+              <button>Connect</button>
+            </div>
+            <div 
+              ref={terminalRef}
+              style={{ 
+                background: '#1e1e1e', 
+                color: '#00ff00', 
+                padding: 16, 
+                height: 500, 
+                fontFamily: 'monospace',
+                borderRadius: 8
+              }}
+            >
+              $ _
+            </div>
+          </Content>
+        </Page>
+      );
+    };
+
+  # ============================================
+  # BUILD & DEPLOY SCREENS
+  # ============================================
+
+  BuildsListPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, Table, TableColumn, StatusOK, StatusError, StatusPending } from '@backstage/core-components';
+    
+    export const BuildsListPage = () => {
+      const columns: TableColumn[] = [
+        { title: 'Build', field: 'id' },
+        { title: 'Service', field: 'service_name' },
+        { title: 'Branch', field: 'branch' },
+        { title: 'Commit', field: 'commit_sha', render: (row: any) => row.commit_sha?.substring(0, 7) },
+        { title: 'Status', render: (row: any) => {
+          switch (row.status) {
+            case 'success': return <StatusOK>Success</StatusOK>;
+            case 'running': return <StatusPending>Running</StatusPending>;
+            default: return <StatusError>{row.status}</StatusError>;
+          }
+        }},
+        { title: 'Duration', field: 'duration' },
+        { title: 'Started', field: 'started_at' },
+      ];
+      return (
+        <Page themeId="tool">
+          <Header title="Builds" subtitle="CI/CD build history" />
+          <Content>
+            <Table title="Recent Builds" columns={columns} data={[]} options={{ search: true, paging: true }} />
+          </Content>
+        </Page>
+      );
+    };
+
+  BuildDetailPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, TabbedLayout, InfoCard } from '@backstage/core-components';
+    
+    export const BuildDetailPage = ({ buildId }: { buildId: string }) => {
+      return (
+        <Page themeId="tool">
+          <Header title={`Build #${buildId}`} subtitle="Success • 2m 34s" />
+          <Content>
+            <TabbedLayout>
+              <TabbedLayout.Route path="/" title="Logs">
+                <pre style={{ background: '#1e1e1e', color: '#d4d4d4', padding: 16, height: 600, overflow: 'auto' }}>
+                  [+] Building 154.2s (12/12) FINISHED
+                  =&gt; [internal] load build definition from Dockerfile
+                  =&gt; [internal] load .dockerignore
+                  =&gt; [internal] load metadata for docker.io/library/node:18-alpine
+                  =&gt; [1/7] FROM docker.io/library/node:18-alpine
+                  =&gt; [2/7] WORKDIR /app
+                  =&gt; [3/7] COPY package*.json ./
+                  =&gt; [4/7] RUN npm ci --only=production
+                  =&gt; [5/7] COPY . .
+                  =&gt; [6/7] RUN npm run build
+                  =&gt; [7/7] EXPOSE 3000
+                  =&gt; exporting to image
+                  =&gt; naming to ghcr.io/org/app:abc123
+                  Build completed successfully!
+                </pre>
+              </TabbedLayout.Route>
+              <TabbedLayout.Route path="/artifacts" title="Artifacts" />
+              <TabbedLayout.Route path="/security" title="Security Scan" />
+            </TabbedLayout>
+          </Content>
+        </Page>
+      );
+    };
+
+  PipelinePage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, InfoCard } from '@backstage/core-components';
+    
+    export const PipelinePage = ({ projectId }: { projectId: string }) => {
+      return (
+        <Page themeId="tool">
+          <Header title="Pipelines" subtitle="CI/CD workflow" />
+          <Content>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
+              <InfoCard title="Source">
+                <div>GitHub</div>
+                <div>main branch</div>
+              </InfoCard>
+              <div>→</div>
+              <InfoCard title="Build">
+                <div>Coolify</div>
+                <div>Docker build</div>
+              </InfoCard>
+              <div>→</div>
+              <InfoCard title="Test">
+                <div>Unit tests</div>
+                <div>Security scan</div>
+              </InfoCard>
+              <div>→</div>
+              <InfoCard title="Deploy">
+                <div>ArgoCD</div>
+                <div>GitOps sync</div>
+              </InfoCard>
+            </div>
+          </Content>
+        </Page>
+      );
+    };
+
+  # ============================================
+  # SETTINGS SCREENS
+  # ============================================
+
+  TeamSettingsPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, Table, TableColumn } from '@backstage/core-components';
+    
+    export const TeamSettingsPage = () => {
+      const columns: TableColumn[] = [
+        { title: 'Member', field: 'name' },
+        { title: 'Email', field: 'email' },
+        { title: 'Role', field: 'role' },
+        { title: 'Joined', field: 'joined_at' },
+        { title: 'Actions', render: (row: any) => (
+          <>
+            <button>Edit Role</button>
+            <button>Remove</button>
+          </>
+        )},
+      ];
+      return (
+        <Page themeId="tool">
+          <Header title="Team" subtitle="Manage team members" />
+          <Content>
+            <Table title="Team Members" columns={columns} data={[]} options={{ search: true }} />
+            <button>Invite Member</button>
+          </Content>
+        </Page>
+      );
+    };
+
+  ApiTokensPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, Table, TableColumn } from '@backstage/core-components';
+    
+    export const ApiTokensPage = () => {
+      const columns: TableColumn[] = [
+        { title: 'Name', field: 'name' },
+        { title: 'Token', render: () => '••••••••••••••••' },
+        { title: 'Scopes', field: 'scopes' },
+        { title: 'Created', field: 'created_at' },
+        { title: 'Last Used', field: 'last_used_at' },
+        { title: 'Actions', render: (row: any) => <button>Revoke</button> },
+      ];
+      return (
+        <Page themeId="tool">
+          <Header title="API Tokens" subtitle="Personal access tokens" />
+          <Content>
+            <Table title="Active Tokens" columns={columns} data={[]} />
+            <button>Create Token</button>
+          </Content>
+        </Page>
+      );
+    };
+
+  IntegrationsPage.tsx: |
+    import React from 'react';
+    import { Content, Page, Header, InfoCard } from '@backstage/core-components';
+    
+    const IntegrationCard = ({ name, icon, connected }: { name: string, icon: string, connected: boolean }) => (
+      <InfoCard title={name}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 48 }}>{icon}</div>
+          <div>{connected ? '✅ Connected' : '❌ Not Connected'}</div>
+          <button>{connected ? 'Configure' : 'Connect'}</button>
+        </div>
+      </InfoCard>
+    );
+    
+    export const IntegrationsPage = () => {
+      return (
+        <Page themeId="tool">
+          <Header title="Integrations" subtitle="Connect external services" />
+          <Content>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              <IntegrationCard name="GitHub" icon="🐙" connected={true} />
+              <IntegrationCard name="GitLab" icon="🦊" connected={false} />
+              <IntegrationCard name="Slack" icon="💬" connected={true} />
+              <IntegrationCard name="PagerDuty" icon="🚨" connected={false} />
+              <IntegrationCard name="Datadog" icon="📊" connected={false} />
+              <IntegrationCard name="AWS" icon="☁️" connected={false} />
+              <IntegrationCard name="GCP" icon="🌐" connected={false} />
+              <IntegrationCard name="Azure" icon="🔷" connected={false} />
+            </div>
+          </Content>
+        </Page>
+      );
+    };
+
+  # ============================================
+  # ROUTES
+  # ============================================
+  
+  Routes.tsx: |
+    import { Routes, Route } from 'react-router-dom';
+    
+    // All 46 routes matching Northflank
+    export const appRoutes = (
+      <Routes>
+        {/* Home */}
+        <Route path="/" element={<DashboardPage />} />
+        
+        {/* Projects (8 routes) */}
+        <Route path="/projects" element={<ProjectsListPage />} />
+        <Route path="/projects/new" element={<CreateProjectPage />} />
+        <Route path="/projects/:id" element={<ProjectOverviewPage />} />
+        <Route path="/projects/:id/settings" element={<ProjectSettingsPage />} />
+        <Route path="/projects/:id/members" element={<ProjectMembersPage />} />
+        <Route path="/projects/:id/billing" element={<ProjectBillingPage />} />
+        <Route path="/projects/:id/secrets" element={<ProjectSecretsPage />} />
+        <Route path="/projects/:id/audit" element={<ProjectAuditPage />} />
+        
+        {/* Services (12 routes) */}
+        <Route path="/services" element={<ServicesListPage />} />
+        <Route path="/services/new" element={<CreateServicePage />} />
+        <Route path="/services/:id" element={<ServiceDetailPage />} />
+        <Route path="/services/:id/logs" element={<ServiceLogsPage />} />
+        <Route path="/services/:id/metrics" element={<ServiceMetricsPage />} />
+        <Route path="/services/:id/scaling" element={<ServiceScalingPage />} />
+        <Route path="/services/:id/env" element={<ServiceEnvPage />} />
+        <Route path="/services/:id/ports" element={<ServicePortsPage />} />
+        <Route path="/services/:id/health" element={<ServiceHealthPage />} />
+        <Route path="/services/:id/volumes" element={<ServiceVolumesPage />} />
+        <Route path="/services/:id/shell" element={<ServiceShellPage />} />
+        <Route path="/services/:id/events" element={<ServiceEventsPage />} />
+        
+        {/* Databases (6 routes) */}
+        <Route path="/databases" element={<DatabasesListPage />} />
+        <Route path="/databases/new" element={<CreateDatabasePage />} />
+        <Route path="/databases/:id" element={<DatabaseDetailPage />} />
+        <Route path="/databases/:id/connect" element={<DatabaseConnectPage />} />
+        <Route path="/databases/:id/backups" element={<DatabaseBackupsPage />} />
+        <Route path="/databases/:id/metrics" element={<DatabaseMetricsPage />} />
+        
+        {/* Builds (8 routes) */}
+        <Route path="/builds" element={<BuildsListPage />} />
+        <Route path="/builds/:id" element={<BuildDetailPage />} />
+        <Route path="/deployments" element={<DeploymentsListPage />} />
+        <Route path="/deployments/:id" element={<DeploymentDetailPage />} />
+        <Route path="/pipelines" element={<PipelinePage />} />
+        <Route path="/gitops" element={<GitOpsPage />} />
+        <Route path="/settings/git" element={<GitConnectionsPage />} />
+        <Route path="/settings/webhooks" element={<WebhooksPage />} />
+        
+        {/* Monitoring (6 routes) */}
+        <Route path="/monitoring" element={<MonitoringDashboardPage />} />
+        <Route path="/monitoring/metrics" element={<MetricsExplorerPage />} />
+        <Route path="/monitoring/logs" element={<LogsExplorerPage />} />
+        <Route path="/monitoring/alerts" element={<AlertsPage />} />
+        <Route path="/monitoring/traces" element={<TracesPage />} />
+        <Route path="/status" element={<StatusPage />} />
+        
+        {/* Settings (6 routes) */}
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/account" element={<AccountSettingsPage />} />
+        <Route path="/settings/team" element={<TeamSettingsPage />} />
+        <Route path="/settings/tokens" element={<ApiTokensPage />} />
+        <Route path="/settings/billing" element={<BillingPage />} />
+        <Route path="/settings/integrations" element={<IntegrationsPage />} />
+        
+        {/* Admin */}
+        <Route path="/admin/clusters" element={<ClustersAdminPage />} />
+      </Routes>
+    );

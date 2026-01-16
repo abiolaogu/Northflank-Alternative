@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/openpaas/platform-orchestrator/internal/domain"
-	"github.com/openpaas/platform-orchestrator/pkg/errors"
+	"github.com/northstack/platform/internal/domain"
+	"github.com/northstack/platform/pkg/errors"
 )
 
 // ServiceRepository implements domain.ServiceRepository using PostgreSQL

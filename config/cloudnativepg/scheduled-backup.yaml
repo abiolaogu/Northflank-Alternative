@@ -1,0 +1,30 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: northstack-production-daily
+  namespace: northstack-database
+spec:
+  cluster:
+    name: northstack-production
+  
+  # Schedule: Daily at 2 AM UTC
+  schedule: "0 2 * * *"
+  method: barmanObjectStore
+  backupOwnerReference: self
+  immediate: true
+  suspend: false
+
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: northstack-production-weekly
+  namespace: northstack-database
+spec:
+  cluster:
+    name: northstack-production
+  
+  # Schedule: Sunday at 3 AM UTC
+  schedule: "0 3 * * 0"
+  method: barmanObjectStore
+  backupOwnerReference: self

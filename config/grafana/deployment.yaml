@@ -1,0 +1,375 @@
+# Grafana Deployment for NorthStack
+# Monitoring Dashboard for all users
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack-monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    northstack.io/component: monitoring
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  namespace: northstack-monitoring
+data:
+  grafana.ini: |
+    [server]
+    root_url = https://monitor.northstack.io
+    
+    [security]
+    admin_user = admin
+    admin_password = ${ADMIN_PASSWORD}
+    
+    [auth]
+    disable_login_form = false
+    
+    [auth.generic_oauth]
+    enabled = true
+    name = NorthStack
+    allow_sign_up = true
+    client_id = grafana
+    client_secret = ${OAUTH_SECRET}
+    scopes = openid profile email
+    auth_url = https://api.northstack.io/oauth/authorize
+    token_url = https://api.northstack.io/oauth/token
+    api_url = https://api.northstack.io/api/v1/users/me
+    
+    [users]
+    allow_sign_up = false
+    auto_assign_org = true
+    auto_assign_org_role = Viewer
+    
+    [dashboards]
+    default_home_dashboard_path = /var/lib/grafana/dashboards/northstack-overview.json
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: northstack-monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-server.northstack-monitoring:9090
+        isDefault: true
+        editable: false
+      
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.northstack-monitoring:3100
+        editable: false
+      
+      - name: YugabyteDB
+        type: postgres
+        access: proxy
+        url: yugabyte-ysql.northstack-database:5433
+        database: northstack
+        user: grafana_readonly
+        secureJsonData:
+          password: ${YUGABYTE_PASSWORD}
+        jsonData:
+          sslmode: require
+        editable: false
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: northstack-monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'NorthStack'
+        orgId: 1
+        folder: 'NorthStack'
+        type: file
+        disableDeletion: true
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: northstack-monitoring
+data:
+  northstack-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "uid": "northstack-overview",
+        "title": "NorthStack Platform Overview",
+        "tags": ["northstack", "overview"],
+        "timezone": "browser",
+        "schemaVersion": 38,
+        "version": 1,
+        "refresh": "30s",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Active Projects",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+            "datasource": "Prometheus",
+            "targets": [
+              {"expr": "northstack_projects_total", "legendFormat": "Projects"}
+            ],
+            "options": {"colorMode": "value", "graphMode": "none"}
+          },
+          {
+            "id": 2,
+            "title": "Running Services",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+            "datasource": "Prometheus",
+            "targets": [
+              {"expr": "sum(northstack_services_running)", "legendFormat": "Services"}
+            ],
+            "options": {"colorMode": "value", "graphMode": "area"}
+          },
+          {
+            "id": 3,
+            "title": "Successful Builds (24h)",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+            "datasource": "Prometheus",
+            "targets": [
+              {"expr": "sum(increase(northstack_builds_total{status=\"success\"}[24h]))", "legendFormat": "Builds"}
+            ],
+            "options": {"colorMode": "value"}
+          },
+          {
+            "id": 4,
+            "title": "Database Clusters",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+            "datasource": "Prometheus",
+            "targets": [
+              {"expr": "northstack_databases_total", "legendFormat": "Databases"}
+            ]
+          },
+          {
+            "id": 5,
+            "title": "API Request Rate",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+            "datasource": "Prometheus",
+            "targets": [
+              {"expr": "sum(rate(http_requests_total[5m])) by (status)", "legendFormat": "{{status}}"}
+            ]
+          },
+          {
+            "id": 6,
+            "title": "API Latency (p95)",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+            "datasource": "Prometheus",
+            "targets": [
+              {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95"}
+            ]
+          },
+          {
+            "id": 7,
+            "title": "Build Success Rate",
+            "type": "gauge",
+            "gridPos": {"h": 6, "w": 8, "x": 0, "y": 12},
+            "datasource": "Prometheus",
+            "targets": [
+              {"expr": "sum(northstack_builds_total{status=\"success\"}) / sum(northstack_builds_total) * 100"}
+            ],
+            "options": {
+              "reduceOptions": {"calcs": ["lastNotNull"]},
+              "showThresholdMarkers": true
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 80},
+                    {"color": "green", "value": 95}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 8,
+            "title": "Recent Deployments",
+            "type": "table",
+            "gridPos": {"h": 6, "w": 16, "x": 8, "y": 12},
+            "datasource": "YugabyteDB",
+            "targets": [
+              {"rawSql": "SELECT name, status, created_at FROM deployments ORDER BY created_at DESC LIMIT 10", "format": "table"}
+            ]
+          },
+          {
+            "id": 9,
+            "title": "Cluster Resource Usage",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 18},
+            "datasource": "Prometheus",
+            "targets": [
+              {"expr": "sum(container_memory_usage_bytes{namespace=~\"northstack.*\"}) / 1024 / 1024 / 1024", "legendFormat": "Memory (GB)"},
+              {"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"northstack.*\"}[5m]))", "legendFormat": "CPU Cores"}
+            ]
+          }
+        ]
+      }
+    }
+  
+  services-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "uid": "northstack-services",
+        "title": "NorthStack Services",
+        "tags": ["northstack", "services"],
+        "panels": [
+          {
+            "id": 1,
+            "title": "Service Status",
+            "type": "table",
+            "gridPos": {"h": 10, "w": 24, "x": 0, "y": 0}
+          }
+        ]
+      }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: northstack-monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.2.0
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-secrets
+                  key: admin-password
+          volumeMounts:
+            - name: config
+              mountPath: /etc/grafana/grafana.ini
+              subPath: grafana.ini
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+            - name: storage
+              mountPath: /var/lib/grafana
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+      volumes:
+        - name: config
+          configMap:
+            name: grafana-config
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboards-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+        - name: storage
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: northstack-monitoring
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 3000
+  selector:
+    app: grafana
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: northstack-monitoring
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - monitor.northstack.io
+      secretName: grafana-tls
+  rules:
+    - host: monitor.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 80
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secrets
+  namespace: northstack-monitoring
+type: Opaque
+stringData:
+  admin-password: "CHANGE_ME_ADMIN_PASSWORD"

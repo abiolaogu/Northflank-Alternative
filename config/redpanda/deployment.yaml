@@ -1,0 +1,282 @@
+# Redpanda Deployment for NorthStack
+# Kafka-compatible streaming platform - simpler, faster, no ZooKeeper
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack-redpanda
+  labels:
+    app.kubernetes.io/name: redpanda
+    northstack.io/component: streaming
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redpanda-config
+  namespace: northstack-redpanda
+data:
+  redpanda.yaml: |
+    redpanda:
+      data_directory: /var/lib/redpanda/data
+      empty_seed_starts_cluster: false
+      seed_servers:
+        - host:
+            address: redpanda-0.redpanda.northstack-redpanda.svc.cluster.local
+            port: 33145
+      rpc_server:
+        address: 0.0.0.0
+        port: 33145
+      kafka_api:
+        - address: 0.0.0.0
+          port: 9092
+          name: kafka
+      admin:
+        - address: 0.0.0.0
+          port: 9644
+          name: admin
+      developer_mode: false
+      auto_create_topics_enabled: true
+      fetch_reads_debounce_timeout: 10
+      group_initial_rebalance_delay: 0
+      group_topic_partitions: 16
+      log_segment_size: 536870912
+      storage_min_free_bytes: 10737418240
+      topic_partitions_per_shard: 1000
+    
+    rpk:
+      kafka_api:
+        brokers:
+          - redpanda-0.redpanda.northstack-redpanda.svc.cluster.local:9092
+          - redpanda-1.redpanda.northstack-redpanda.svc.cluster.local:9092
+          - redpanda-2.redpanda.northstack-redpanda.svc.cluster.local:9092
+      admin_api:
+        addresses:
+          - redpanda-0.redpanda.northstack-redpanda.svc.cluster.local:9644
+    
+    schema_registry:
+      schema_registry_api:
+        - address: 0.0.0.0
+          port: 8081
+          name: schema-registry
+    
+    pandaproxy:
+      pandaproxy_api:
+        - address: 0.0.0.0
+          port: 8082
+          name: proxy
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redpanda
+  namespace: northstack-redpanda
+spec:
+  serviceName: redpanda
+  replicas: 3
+  selector:
+    matchLabels:
+      app: redpanda
+  template:
+    metadata:
+      labels:
+        app: redpanda
+    spec:
+      securityContext:
+        fsGroup: 101
+      containers:
+        - name: redpanda
+          image: docker.redpanda.com/redpandadata/redpanda:v23.3.4
+          args:
+            - redpanda
+            - start
+            - --smp=2
+            - --memory=4G
+            - --reserve-memory=1G
+            - --overprovisioned
+            - --node-id=$(POD_ORDINAL)
+            - --check=false
+            - --advertise-kafka-addr=internal://$(POD_NAME).redpanda.northstack-redpanda.svc.cluster.local:9092
+            - --advertise-rpc-addr=$(POD_NAME).redpanda.northstack-redpanda.svc.cluster.local:33145
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_ORDINAL
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          ports:
+            - containerPort: 9092
+              name: kafka
+            - containerPort: 33145
+              name: rpc
+            - containerPort: 9644
+              name: admin
+            - containerPort: 8081
+              name: schema-registry
+            - containerPort: 8082
+              name: proxy
+          volumeMounts:
+            - name: datadir
+              mountPath: /var/lib/redpanda/data
+            - name: config
+              mountPath: /etc/redpanda
+          resources:
+            requests:
+              cpu: "1"
+              memory: "4Gi"
+            limits:
+              cpu: "2"
+              memory: "6Gi"
+          livenessProbe:
+            httpGet:
+              path: /v1/status/ready
+              port: admin
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /v1/status/ready
+              port: admin
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: redpanda-config
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 100Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda
+  namespace: northstack-redpanda
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 9092
+      name: kafka
+    - port: 33145
+      name: rpc
+    - port: 9644
+      name: admin
+    - port: 8081
+      name: schema-registry
+    - port: 8082
+      name: proxy
+  selector:
+    app: redpanda
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda-external
+  namespace: northstack-redpanda
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9092
+      name: kafka
+    - port: 8081
+      name: schema-registry
+    - port: 8082
+      name: proxy
+    - port: 9644
+      name: admin
+  selector:
+    app: redpanda
+
+---
+# Redpanda Console (Web UI)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redpanda-console
+  namespace: northstack-redpanda
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda-console
+  template:
+    metadata:
+      labels:
+        app: redpanda-console
+    spec:
+      containers:
+        - name: console
+          image: docker.redpanda.com/redpandadata/console:v2.3.8
+          ports:
+            - containerPort: 8080
+          env:
+            - name: KAFKA_BROKERS
+              value: "redpanda-0.redpanda.northstack-redpanda.svc.cluster.local:9092,redpanda-1.redpanda.northstack-redpanda.svc.cluster.local:9092,redpanda-2.redpanda.northstack-redpanda.svc.cluster.local:9092"
+            - name: KAFKA_SCHEMAREGISTRY_ENABLED
+              value: "true"
+            - name: KAFKA_SCHEMAREGISTRY_URLS
+              value: "http://redpanda-0.redpanda.northstack-redpanda.svc.cluster.local:8081"
+            - name: REDPANDA_ADMINAPI_ENABLED
+              value: "true"
+            - name: REDPANDA_ADMINAPI_URLS
+              value: "http://redpanda-0.redpanda.northstack-redpanda.svc.cluster.local:9644"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda-console
+  namespace: northstack-redpanda
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: redpanda-console
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: redpanda-console
+  namespace: northstack-redpanda
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - streams.northstack.io
+      secretName: redpanda-console-tls
+  rules:
+    - host: streams.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: redpanda-console
+                port:
+                  number: 80

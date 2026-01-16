@@ -6,9 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/openpaas/platform-orchestrator/internal/domain"
-	"github.com/openpaas/platform-orchestrator/pkg/errors"
-	"github.com/openpaas/platform-orchestrator/pkg/logger"
+	"github.com/northstack/platform/internal/domain"
+	"github.com/northstack/platform/pkg/errors"
+	"github.com/northstack/platform/pkg/logger"
 )
 
 // ServiceHandler handles service-related HTTP requests
@@ -102,23 +102,23 @@ type PortRequest struct {
 
 // ServiceResponse represents the response body for a service
 type ServiceResponse struct {
-	ID             uuid.UUID              `json:"id"`
-	ProjectID      uuid.UUID              `json:"project_id"`
-	Name           string                 `json:"name"`
-	Slug           string                 `json:"slug"`
-	Type           string                 `json:"type"`
-	Status         string                 `json:"status"`
-	BuildSource    domain.BuildSource     `json:"build_source"`
-	Resources      domain.ResourceLimits  `json:"resources"`
-	Scaling        domain.ScalingConfig   `json:"scaling"`
-	HealthCheck    *domain.HealthCheck    `json:"health_check,omitempty"`
-	EnvVars        map[string]string      `json:"env_vars,omitempty"`
-	SecretRefs     []string               `json:"secret_refs,omitempty"`
-	Ports          []domain.ServicePort   `json:"ports,omitempty"`
-	Labels         map[string]string      `json:"labels,omitempty"`
-	CurrentVersion string                 `json:"current_version,omitempty"`
-	CreatedAt      time.Time              `json:"created_at"`
-	UpdatedAt      time.Time              `json:"updated_at"`
+	ID             uuid.UUID             `json:"id"`
+	ProjectID      uuid.UUID             `json:"project_id"`
+	Name           string                `json:"name"`
+	Slug           string                `json:"slug"`
+	Type           string                `json:"type"`
+	Status         string                `json:"status"`
+	BuildSource    domain.BuildSource    `json:"build_source"`
+	Resources      domain.ResourceLimits `json:"resources"`
+	Scaling        domain.ScalingConfig  `json:"scaling"`
+	HealthCheck    *domain.HealthCheck   `json:"health_check,omitempty"`
+	EnvVars        map[string]string     `json:"env_vars,omitempty"`
+	SecretRefs     []string              `json:"secret_refs,omitempty"`
+	Ports          []domain.ServicePort  `json:"ports,omitempty"`
+	Labels         map[string]string     `json:"labels,omitempty"`
+	CurrentVersion string                `json:"current_version,omitempty"`
+	CreatedAt      time.Time             `json:"created_at"`
+	UpdatedAt      time.Time             `json:"updated_at"`
 }
 
 // Create handles POST /projects/:project_id/services
@@ -516,10 +516,7 @@ func (h *ServiceHandler) Scale(c *gin.Context) {
 		},
 	})
 
-	h.logger.Info().
-		Str("service_id", id.String()).
-		Int32("replicas", req.Replicas).
-		Msg("Service scaled")
+	h.logger.Info().Str("service_id", id.String()).Int("replicas", int(req.Replicas)).Msg("Scaling service")
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Service scaled",

@@ -1,0 +1,261 @@
+# NorthStack Platform - Harvester Deployment
+# Rancher Harvester HCI (Hyperconverged Infrastructure)
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack
+  labels:
+    app.kubernetes.io/name: northstack
+    app.kubernetes.io/managed-by: harvester
+
+---
+# VirtualMachineImage for base OS
+apiVersion: harvesterhci.io/v1beta1
+kind: VirtualMachineImage
+metadata:
+  name: ubuntu-22.04-server
+  namespace: northstack
+spec:
+  displayName: Ubuntu 22.04 Server
+  sourceType: download
+  url: https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img
+
+---
+# StorageClass for Harvester
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: northstack-storage
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: driver.longhorn.io
+parameters:
+  numberOfReplicas: "3"
+  staleReplicaTimeout: "2880"
+  dataLocality: "best-effort"
+  migratable: "true"
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+
+---
+# API Server Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: northstack-api
+  namespace: northstack
+  labels:
+    app: northstack-api
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: northstack-api
+  template:
+    metadata:
+      labels:
+        app: northstack-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: northstack-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: api
+          image: ghcr.io/northstack/platform:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: ENV
+              value: "production"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: northstack-secrets
+                  key: database-url
+            - name: NATS_URL
+              value: "nats://nats.northstack.svc:4222"
+            - name: COOLIFY_URL
+              valueFrom:
+                secretKeyRef:
+                  name: northstack-secrets
+                  key: coolify-url
+            - name: ARGOCD_URL
+              value: "https://argocd.northstack.svc"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: northstack-api
+  namespace: northstack
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: northstack-api
+
+---
+# Ingress with cert-manager TLS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+spec:
+  tls:
+    - hosts:
+        - api.northstack.io
+      secretName: northstack-api-tls
+  rules:
+    - host: api.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: northstack-api
+                port:
+                  number: 8080
+
+---
+# HorizontalPodAutoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: northstack-api
+  namespace: northstack
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: northstack-api
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: northstack-api
+  namespace: northstack
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: northstack-api
+
+---
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: northstack-api
+  namespace: northstack
+
+---
+# NetworkPolicy - Zero Trust
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: northstack-api-network-policy
+  namespace: northstack
+spec:
+  podSelector:
+    matchLabels:
+      app: northstack-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: northstack
+      ports:
+        - port: 5432  # YugabyteDB
+        - port: 4222  # NATS
+        - port: 9092  # Redpanda
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP

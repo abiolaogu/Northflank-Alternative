@@ -1,0 +1,234 @@
+# Apache Superset Deployment for NorthStack
+# Admin Analytics Dashboard
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack-superset
+  labels:
+    app.kubernetes.io/name: superset
+    northstack.io/component: analytics
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: superset-config
+  namespace: northstack-superset
+data:
+  superset_config.py: |
+    import os
+    from cachelib.redis import RedisCache
+    
+    # Flask App Builder configuration
+    MAPBOX_API_KEY = os.getenv('MAPBOX_API_KEY', '')
+    SECRET_KEY = os.getenv('SECRET_KEY', 'northstack-superset-secret-key')
+    
+    # Database
+    SQLALCHEMY_DATABASE_URI = os.getenv(
+        'DATABASE_URL',
+        'postgresql://superset:superset@superset-db:5432/superset'
+    )
+    
+    # Redis cache
+    CACHE_CONFIG = {
+        'CACHE_TYPE': 'RedisCache',
+        'CACHE_DEFAULT_TIMEOUT': 300,
+        'CACHE_KEY_PREFIX': 'superset_',
+        'CACHE_REDIS_HOST': os.getenv('REDIS_HOST', 'dragonfly'),
+        'CACHE_REDIS_PORT': os.getenv('REDIS_PORT', 6379),
+        'CACHE_REDIS_DB': os.getenv('REDIS_DB', 1),
+    }
+    
+    RESULTS_BACKEND = RedisCache(
+        host=os.getenv('REDIS_HOST', 'dragonfly'),
+        port=os.getenv('REDIS_PORT', 6379),
+        key_prefix='superset_results'
+    )
+    
+    # Feature flags
+    FEATURE_FLAGS = {
+        'DASHBOARD_NATIVE_FILTERS': True,
+        'DASHBOARD_CROSS_FILTERS': True,
+        'DASHBOARD_NATIVE_FILTERS_SET': True,
+        'ENABLE_TEMPLATE_PROCESSING': True,
+        'EMBEDDED_SUPERSET': True,
+        'VERSIONED_EXPORT': True,
+        'ALERT_REPORTS': True,
+    }
+    
+    # Auth - JWT integration with NorthStack
+    AUTH_TYPE = 1  # AUTH_DB
+    
+    # Enable async queries
+    SQLLAB_ASYNC_TIME_LIMIT_SEC = 300
+    
+    # Row limits
+    ROW_LIMIT = 50000
+    VIZ_ROW_LIMIT = 10000
+    
+    # Timeout
+    SQLLAB_TIMEOUT = 300
+    SUPERSET_WEBSERVER_TIMEOUT = 300
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset
+  namespace: northstack-superset
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: superset
+  template:
+    metadata:
+      labels:
+        app: superset
+    spec:
+      initContainers:
+        - name: init-db
+          image: apache/superset:3.0.0
+          command: ['/bin/sh', '-c']
+          args:
+            - |
+              superset db upgrade
+              superset fab create-admin \
+                --username admin \
+                --firstname Admin \
+                --lastname NorthStack \
+                --email admin@northstack.io \
+                --password $ADMIN_PASSWORD || true
+              superset init
+          env:
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: admin-password
+          volumeMounts:
+            - name: config
+              mountPath: /app/pythonpath
+      containers:
+        - name: superset
+          image: apache/superset:3.0.0
+          ports:
+            - containerPort: 8088
+          env:
+            - name: SUPERSET_CONFIG_PATH
+              value: /app/pythonpath/superset_config.py
+          volumeMounts:
+            - name: config
+              mountPath: /app/pythonpath
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8088
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8088
+            initialDelaySeconds: 30
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: superset-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: superset
+  namespace: northstack-superset
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8088
+  selector:
+    app: superset
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: superset
+  namespace: northstack-superset
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - analytics.northstack.io
+      secretName: superset-tls
+  rules:
+    - host: analytics.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: superset
+                port:
+                  number: 80
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: superset-secrets
+  namespace: northstack-superset
+type: Opaque
+stringData:
+  admin-password: "CHANGE_ME_ADMIN_PASSWORD"
+  secret-key: "CHANGE_ME_SECRET_KEY_32_CHARS"
+
+---
+# Celery Worker for async queries
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset-worker
+  namespace: northstack-superset
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: superset-worker
+  template:
+    metadata:
+      labels:
+        app: superset-worker
+    spec:
+      containers:
+        - name: worker
+          image: apache/superset:3.0.0
+          command: ["celery", "--app=superset.tasks.celery_app:app", "worker", "-Ofair"]
+          volumeMounts:
+            - name: config
+              mountPath: /app/pythonpath
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+      volumes:
+        - name: config
+          configMap:
+            name: superset-config

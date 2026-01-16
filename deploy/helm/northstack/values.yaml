@@ -1,0 +1,299 @@
+# NorthStack Helm Chart Values
+# Multi-cloud configuration
+
+# ============================================
+# GLOBAL CONFIGURATION
+# ============================================
+global:
+  # Cloud provider: harvester, aws, gcp, azure, openstack
+  cloudProvider: harvester
+  
+  # Environment
+  environment: production
+  
+  # Image settings
+  image:
+    repository: ghcr.io/northstack/platform
+    tag: latest
+    pullPolicy: Always
+  
+  # Domain
+  domain: northstack.io
+
+# ============================================
+# API SERVER
+# ============================================
+api:
+  enabled: true
+  replicaCount: 3
+  
+  # Resources
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  
+  # Autoscaling
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilization: 70
+    targetMemoryUtilization: 80
+  
+  # Service
+  service:
+    type: ClusterIP
+    port: 8080
+  
+  # Ingress
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: api.northstack.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: northstack-api-tls
+        hosts:
+          - api.northstack.io
+  
+  # Health checks
+  healthCheck:
+    liveness:
+      path: /health/live
+      initialDelaySeconds: 10
+      periodSeconds: 15
+    readiness:
+      path: /health/ready
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    startup:
+      path: /health/startup
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 30
+  
+  # Environment variables
+  env:
+    LOG_LEVEL: info
+    CORS_ORIGINS: "*"
+
+# ============================================
+# YUGABYTEDB
+# ============================================
+yugabytedb:
+  enabled: true
+  replicas:
+    master: 3
+    tserver: 3
+  storage:
+    master: 10Gi
+    tserver: 100Gi
+  resources:
+    master:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+    tserver:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+
+# ============================================
+# NATS
+# ============================================
+nats:
+  enabled: true
+  cluster:
+    enabled: true
+    replicas: 3
+  jetstream:
+    enabled: true
+    memStorage:
+      size: 1Gi
+    fileStorage:
+      size: 10Gi
+
+# ============================================
+# REDPANDA
+# ============================================
+redpanda:
+  enabled: true
+  replicas: 3
+  storage:
+    capacity: 50Gi
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+
+# ============================================
+# DRAGONFLY (REDIS COMPATIBLE)
+# ============================================
+dragonfly:
+  enabled: true
+  replicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+# ============================================
+# ARGOCD
+# ============================================
+argocd:
+  enabled: true
+  server:
+    ingress:
+      enabled: true
+      hosts:
+        - argocd.northstack.io
+
+# ============================================
+# COOLIFY
+# ============================================
+coolify:
+  enabled: true
+  # External Coolify URL
+  externalUrl: ""
+  token: ""
+
+# ============================================
+# BACKSTAGE
+# ============================================
+backstage:
+  enabled: true
+  replicas: 2
+  ingress:
+    enabled: true
+    hosts:
+      - host: portal.northstack.io
+        paths:
+          - path: /
+            pathType: Prefix
+
+# ============================================
+# GRAFANA
+# ============================================
+grafana:
+  enabled: true
+  adminPassword: ""  # Will be generated if empty
+  ingress:
+    enabled: true
+    hosts:
+      - monitor.northstack.io
+
+# ============================================
+# MONITORING
+# ============================================
+monitoring:
+  prometheus:
+    enabled: true
+    retention: 30d
+    storage: 50Gi
+  
+  loki:
+    enabled: true
+    retention: 168h
+    storage: 50Gi
+  
+  alertmanager:
+    enabled: true
+
+# ============================================
+# SECURITY
+# ============================================
+security:
+  # Pod Security Standards
+  podSecurityStandard: restricted
+  
+  # Network Policies
+  networkPolicies:
+    enabled: true
+    defaultDeny: true
+  
+  # TLS
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+  
+  # RBAC
+  rbac:
+    create: true
+
+# ============================================
+# SECRETS
+# ============================================
+secrets:
+  # Use External Secrets Operator
+  useExternalSecrets: true
+  externalSecretsProvider: "" # aws, gcp, azure, vault
+  
+  # Or provide secrets directly (not recommended for production)
+  databaseUrl: ""
+  jwtSecret: ""
+  natsToken: ""
+  redpandaAuthToken: ""
+
+# ============================================
+# CLOUD-SPECIFIC OVERRIDES
+# ============================================
+
+# AWS EKS
+aws:
+  enabled: false
+  region: us-east-1
+  loadBalancer:
+    type: alb
+  secretsManager:
+    enabled: true
+    secretName: northstack/production
+  irsa:
+    roleArn: ""
+
+# GCP GKE
+gcp:
+  enabled: false
+  project: ""
+  region: us-central1
+  loadBalancer:
+    type: gateway
+  secretManager:
+    enabled: true
+  workloadIdentity:
+    serviceAccount: ""
+
+# Azure AKS
+azure:
+  enabled: false
+  subscriptionId: ""
+  resourceGroup: ""
+  loadBalancer:
+    type: agic
+  keyVault:
+    enabled: true
+    name: ""
+  workloadIdentity:
+    clientId: ""
+
+# OpenStack
+openstack:
+  enabled: false
+  floatingNetworkId: ""
+  availabilityZone: nova
+  barbican:
+    enabled: true
+
+# Harvester
+harvester:
+  enabled: true
+  storageClass: longhorn

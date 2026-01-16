@@ -1,0 +1,20 @@
+# YugabyteDB Kubernetes Operator Setup
+# Install the YugabyteDB operator from the official Helm chart
+# https://docs.yugabyte.com/preview/deploy/kubernetes/
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: yugabyte-operator
+  labels:
+    app.kubernetes.io/name: yugabyte-operator
+    northstack.io/managed: "true"
+
+---
+# The actual operator is installed via Helm:
+# helm repo add yugabytedb https://charts.yugabyte.com
+# helm repo update
+# helm install yugabyte-operator yugabytedb/yugabyte-operator -n yugabyte-operator
+
+# After operator installation, apply the cluster manifests

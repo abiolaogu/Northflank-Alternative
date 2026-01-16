@@ -1,0 +1,146 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: northstack-production
+  namespace: northstack-database
+  labels:
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/component: database
+    northstack.io/tier: production
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.1
+  
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  
+  postgresql:
+    parameters:
+      # Performance
+      shared_buffers: "256MB"
+      effective_cache_size: "768MB"
+      maintenance_work_mem: "64MB"
+      work_mem: "4MB"
+      max_connections: "200"
+      
+      # WAL settings
+      wal_level: "replica"
+      max_wal_senders: "10"
+      max_replication_slots: "10"
+      wal_keep_size: "512MB"
+      
+      # Logging
+      log_destination: "stderr"
+      logging_collector: "off"
+      log_min_duration_statement: "1000"
+      log_statement: "ddl"
+      
+      # Security
+      ssl: "on"
+      ssl_min_protocol_version: "TLSv1.3"
+      
+      # Extensions
+      shared_preload_libraries: "pg_stat_statements"
+    
+    pg_hba:
+      - host all all 10.0.0.0/8 scram-sha-256
+      - hostssl all all 0.0.0.0/0 scram-sha-256
+  
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2"
+  
+  storage:
+    storageClass: fast-ssd
+    size: 100Gi
+  
+  walStorage:
+    storageClass: fast-ssd
+    size: 20Gi
+  
+  replicationSlots:
+    highAvailability:
+      enabled: true
+      slotPrefix: _cnpg_
+  
+  minSyncReplicas: 1
+  maxSyncReplicas: 2
+  
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://northstack-backups/production
+      endpointURL: http://minio.northstack-storage.svc:9000
+      s3Credentials:
+        accessKeyId:
+          name: backup-creds
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: backup-creds
+          key: SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+        maxParallel: 4
+      data:
+        compression: gzip
+        jobs: 2
+    retentionPolicy: "30d"
+  
+  monitoring:
+    enablePodMonitor: true
+  
+  bootstrap:
+    initdb:
+      database: northstack
+      owner: northstack
+      secret:
+        name: northstack-db-credentials
+      postInitSQL:
+        - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+        - CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        - CREATE EXTENSION IF NOT EXISTS pgcrypto;
+  
+  superuserSecret:
+    name: northstack-superuser
+  
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: northstack-production-pooler
+  namespace: northstack-database
+spec:
+  cluster:
+    name: northstack-production
+  
+  instances: 2
+  type: rw
+  
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      max_client_conn: "1000"
+      default_pool_size: "20"
+      reserve_pool_size: "5"
+      max_db_connections: "100"
+      log_connections: "1"
+      log_disconnections: "1"
+  
+  template:
+    spec:
+      containers:
+        - name: pgbouncer
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

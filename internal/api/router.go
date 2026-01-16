@@ -2,14 +2,40 @@
 package api
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/gin-gonic/gin"
-	"github.com/openpaas/platform-orchestrator/internal/api/handlers"
-	"github.com/openpaas/platform-orchestrator/internal/api/middleware"
-	"github.com/openpaas/platform-orchestrator/internal/config"
-	"github.com/openpaas/platform-orchestrator/internal/domain"
-	"github.com/openpaas/platform-orchestrator/pkg/logger"
+	"github.com/northstack/platform/internal/api/handlers"
+	"github.com/northstack/platform/internal/api/middleware"
+	"github.com/northstack/platform/internal/config"
+	"github.com/northstack/platform/internal/domain"
+	"github.com/northstack/platform/pkg/logger"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+var (
+	httpRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests",
+		},
+		[]string{"path", "method", "status"},
+	)
+	httpDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "http_request_duration_seconds",
+			Help: "Duration of HTTP requests in seconds",
+		},
+		[]string{"path", "method"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(httpRequests)
+	prometheus.MustRegister(httpDuration)
+}
 
 // Router holds all the dependencies for the API router
 type Router struct {
@@ -45,7 +71,7 @@ func NewRouter(
 
 // Setup configures and returns the Gin router
 func (r *Router) Setup() *gin.Engine {
-	if r.config.Logging.Level != "debug" {
+	if r.config.Observability.Logging.Level != "debug" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -54,7 +80,10 @@ func (r *Router) Setup() *gin.Engine {
 	// Global middleware
 	router.Use(gin.Recovery())
 	router.Use(middleware.RequestIDMiddleware())
-	router.Use(middleware.LoggingMiddleware(r.logger))
+	// Add logging middleware
+	if r.config.Observability.Logging.Level != "" {
+		router.Use(middleware.LoggingMiddleware(r.logger))
+	}
 
 	if r.config.Server.CORSEnabled {
 		router.Use(middleware.CORSMiddleware(r.config.Server.CORSOrigins))
@@ -71,8 +100,30 @@ func (r *Router) Setup() *gin.Engine {
 	router.GET("/health/ready", healthHandler.Ready)
 
 	// Metrics endpoint
-	if r.config.Metrics.Enabled {
-		router.GET(r.config.Metrics.Path, gin.WrapH(promhttp.Handler()))
+	if r.config.Observability.Metrics.Enabled {
+		// Expose Prometheus metrics at the configured path
+		router.GET(r.config.Observability.Metrics.Path, gin.WrapH(promhttp.HandlerFor(
+			prometheus.DefaultGatherer,
+			promhttp.HandlerOpts{
+				EnableOpenMetrics: true,
+			},
+		)))
+		// Add middleware to record metrics for all requests
+		router.Use(func(c *gin.Context) {
+			start := time.Now()
+			c.Next() // Process request
+
+			path := c.FullPath()
+			if path == "" {
+				path = "unknown" // Fallback for routes without a full path (e.g., 404s)
+			}
+
+			duration := time.Since(start).Seconds()
+			status := fmt.Sprintf("%d", c.Writer.Status())
+
+			httpRequests.WithLabelValues(path, c.Request.Method, status).Inc()
+			httpDuration.WithLabelValues(path, c.Request.Method).Observe(duration)
+		})
 	}
 
 	// API v1 routes
@@ -81,10 +132,16 @@ func (r *Router) Setup() *gin.Engine {
 	// Auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(&r.config.Auth, r.userRepo, r.logger)
 
-	// Public routes (no auth)
-	v1.POST("/auth/login", r.handleLogin)
-	v1.POST("/auth/register", r.handleRegister)
+	// Auth handler (public routes)
+	authHandler := handlers.NewAuthHandler(r.userRepo, &r.config.Auth, r.logger)
+	v1.POST("/auth/login", authHandler.Login)
+	v1.POST("/auth/register", authHandler.Register)
+	v1.POST("/auth/refresh", authHandler.RefreshToken)
 	v1.POST("/webhooks/:source", r.handleWebhook)
+
+	// GitHub webhook handler
+	githubWebhook := handlers.NewGitHubWebhookHandler(r.config.Integrations.Coolify.WebhookSecret, r.logger)
+	v1.POST("/webhooks/github", githubWebhook.HandleWebhook)
 
 	// Protected routes
 	protected := v1.Group("")
@@ -109,6 +166,11 @@ func (r *Router) Setup() *gin.Engine {
 		protected.POST("/services/:id/builds", serviceHandler.TriggerBuild)
 		protected.POST("/services/:id/scale", serviceHandler.Scale)
 
+		// User management
+		protected.GET("/users/me", authHandler.GetCurrentUser)
+		protected.PATCH("/users/me", authHandler.UpdateCurrentUser)
+		protected.POST("/auth/logout", authHandler.Logout)
+
 		// Clusters (admin only)
 		adminOnly := protected.Group("")
 		adminOnly.Use(authMiddleware.RequireRole(domain.UserRoleAdmin))
@@ -117,23 +179,49 @@ func (r *Router) Setup() *gin.Engine {
 			adminOnly.GET("/clusters", r.handleListClusters)
 			adminOnly.GET("/clusters/:id", r.handleGetCluster)
 			adminOnly.DELETE("/clusters/:id", r.handleDeleteCluster)
-		}
+			adminOnly.GET("/clusters/:id/kubeconfig", r.handleGetClusterKubeconfig)
 
-		// User management
-		protected.GET("/users/me", r.handleGetCurrentUser)
-		protected.PATCH("/users/me", r.handleUpdateCurrentUser)
+			// Database management
+			adminOnly.POST("/projects/:project_id/databases", r.handleCreateDatabase)
+			adminOnly.GET("/projects/:project_id/databases", r.handleListDatabases)
+			adminOnly.GET("/databases/:id", r.handleGetDatabase)
+			adminOnly.DELETE("/databases/:id", r.handleDeleteDatabase)
+			adminOnly.POST("/databases/:id/scale", r.handleScaleDatabase)
+		}
 	}
 
 	return router
 }
 
-// Placeholder handlers - implement fully in production
-func (r *Router) handleLogin(c *gin.Context)            { c.JSON(200, gin.H{"message": "login endpoint"}) }
-func (r *Router) handleRegister(c *gin.Context)         { c.JSON(200, gin.H{"message": "register endpoint"}) }
-func (r *Router) handleWebhook(c *gin.Context)          { c.JSON(200, gin.H{"message": "webhook received"}) }
-func (r *Router) handleCreateCluster(c *gin.Context)    { c.JSON(200, gin.H{"message": "create cluster"}) }
-func (r *Router) handleListClusters(c *gin.Context)     { c.JSON(200, gin.H{"message": "list clusters"}) }
-func (r *Router) handleGetCluster(c *gin.Context)       { c.JSON(200, gin.H{"message": "get cluster"}) }
-func (r *Router) handleDeleteCluster(c *gin.Context)    { c.JSON(200, gin.H{"message": "delete cluster"}) }
-func (r *Router) handleGetCurrentUser(c *gin.Context)   { c.JSON(200, gin.H{"message": "get current user"}) }
-func (r *Router) handleUpdateCurrentUser(c *gin.Context){ c.JSON(200, gin.H{"message": "update current user"}) }
+// Placeholder handlers for cluster and database - will be injected via DI
+func (r *Router) handleWebhook(c *gin.Context) { c.JSON(200, gin.H{"message": "webhook received"}) }
+func (r *Router) handleCreateCluster(c *gin.Context) {
+	c.JSON(501, gin.H{"error": "Not implemented - inject ClusterHandler"})
+}
+func (r *Router) handleListClusters(c *gin.Context) {
+	c.JSON(501, gin.H{"error": "Not implemented - inject ClusterHandler"})
+}
+func (r *Router) handleGetCluster(c *gin.Context) {
+	c.JSON(501, gin.H{"error": "Not implemented - inject ClusterHandler"})
+}
+func (r *Router) handleDeleteCluster(c *gin.Context) {
+	c.JSON(501, gin.H{"error": "Not implemented - inject ClusterHandler"})
+}
+func (r *Router) handleGetClusterKubeconfig(c *gin.Context) {
+	c.JSON(501, gin.H{"error": "Not implemented"})
+}
+func (r *Router) handleCreateDatabase(c *gin.Context) {
+	c.JSON(501, gin.H{"error": "Not implemented - inject DatabaseHandler"})
+}
+func (r *Router) handleListDatabases(c *gin.Context) {
+	c.JSON(501, gin.H{"error": "Not implemented - inject DatabaseHandler"})
+}
+func (r *Router) handleGetDatabase(c *gin.Context) {
+	c.JSON(501, gin.H{"error": "Not implemented - inject DatabaseHandler"})
+}
+func (r *Router) handleDeleteDatabase(c *gin.Context) {
+	c.JSON(501, gin.H{"error": "Not implemented - inject DatabaseHandler"})
+}
+func (r *Router) handleScaleDatabase(c *gin.Context) {
+	c.JSON(501, gin.H{"error": "Not implemented - inject DatabaseHandler"})
+}

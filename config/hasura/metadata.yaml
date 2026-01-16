@@ -1,0 +1,282 @@
+# Hasura GraphQL Engine - Extended Configuration
+# Developer API Console and Metadata
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hasura-metadata
+  namespace: northstack-hasura
+data:
+  metadata.json: |
+    {
+      "version": 3,
+      "sources": [
+        {
+          "name": "default",
+          "kind": "postgres",
+          "tables": [
+            {
+              "table": {"schema": "public", "name": "projects"},
+              "object_relationships": [
+                {"name": "owner", "using": {"foreign_key_constraint_on": "owner_id"}}
+              ],
+              "array_relationships": [
+                {"name": "services", "using": {"foreign_key_constraint_on": {"column": "project_id", "table": {"schema": "public", "name": "services"}}}}
+              ],
+              "select_permissions": [
+                {"role": "user", "permission": {"columns": "*", "filter": {"owner_id": {"_eq": "X-Hasura-User-Id"}}}},
+                {"role": "admin", "permission": {"columns": "*", "filter": {}}}
+              ],
+              "insert_permissions": [
+                {"role": "user", "permission": {"columns": ["name", "description", "labels"], "check": {}}},
+                {"role": "admin", "permission": {"columns": "*", "check": {}}}
+              ],
+              "update_permissions": [
+                {"role": "user", "permission": {"columns": ["name", "description", "labels"], "filter": {"owner_id": {"_eq": "X-Hasura-User-Id"}}}},
+                {"role": "admin", "permission": {"columns": "*", "filter": {}}}
+              ],
+              "delete_permissions": [
+                {"role": "admin", "permission": {"filter": {}}}
+              ]
+            },
+            {
+              "table": {"schema": "public", "name": "services"},
+              "object_relationships": [
+                {"name": "project", "using": {"foreign_key_constraint_on": "project_id"}}
+              ],
+              "array_relationships": [
+                {"name": "builds", "using": {"foreign_key_constraint_on": {"column": "service_id", "table": {"schema": "public", "name": "builds"}}}},
+                {"name": "deployments", "using": {"foreign_key_constraint_on": {"column": "service_id", "table": {"schema": "public", "name": "deployments"}}}}
+              ],
+              "select_permissions": [
+                {"role": "user", "permission": {"columns": "*", "filter": {"project": {"owner_id": {"_eq": "X-Hasura-User-Id"}}}}},
+                {"role": "admin", "permission": {"columns": "*", "filter": {}}}
+              ]
+            },
+            {
+              "table": {"schema": "public", "name": "builds"},
+              "object_relationships": [
+                {"name": "service", "using": {"foreign_key_constraint_on": "service_id"}}
+              ],
+              "select_permissions": [
+                {"role": "user", "permission": {"columns": "*", "filter": {}}},
+                {"role": "admin", "permission": {"columns": "*", "filter": {}}}
+              ]
+            },
+            {
+              "table": {"schema": "public", "name": "deployments"},
+              "object_relationships": [
+                {"name": "service", "using": {"foreign_key_constraint_on": "service_id"}},
+                {"name": "build", "using": {"foreign_key_constraint_on": "build_id"}}
+              ],
+              "select_permissions": [
+                {"role": "user", "permission": {"columns": "*", "filter": {}}},
+                {"role": "admin", "permission": {"columns": "*", "filter": {}}}
+              ]
+            },
+            {
+              "table": {"schema": "public", "name": "clusters"},
+              "select_permissions": [
+                {"role": "admin", "permission": {"columns": "*", "filter": {}}}
+              ],
+              "insert_permissions": [
+                {"role": "admin", "permission": {"columns": "*", "check": {}}}
+              ]
+            },
+            {
+              "table": {"schema": "public", "name": "databases"},
+              "object_relationships": [
+                {"name": "project", "using": {"foreign_key_constraint_on": "project_id"}}
+              ],
+              "select_permissions": [
+                {"role": "user", "permission": {"columns": ["id", "name", "status", "size", "created_at"], "filter": {}}},
+                {"role": "admin", "permission": {"columns": "*", "filter": {}}}
+              ]
+            },
+            {
+              "table": {"schema": "public", "name": "users"},
+              "select_permissions": [
+                {"role": "user", "permission": {"columns": ["id", "email", "name", "avatar_url", "role"], "filter": {"id": {"_eq": "X-Hasura-User-Id"}}}},
+                {"role": "admin", "permission": {"columns": "*", "filter": {}}}
+              ]
+            },
+            {
+              "table": {"schema": "public", "name": "audit_logs"},
+              "select_permissions": [
+                {"role": "admin", "permission": {"columns": "*", "filter": {}}}
+              ]
+            }
+          ],
+          "configuration": {
+            "connection_info": {
+              "use_prepared_statements": true,
+              "database_url": {"from_env": "HASURA_GRAPHQL_DATABASE_URL"},
+              "isolation_level": "read-committed",
+              "pool_settings": {
+                "connection_lifetime": 600,
+                "retries": 3,
+                "idle_timeout": 180,
+                "max_connections": 50
+              }
+            }
+          }
+        }
+      ],
+      "actions": [
+        {
+          "name": "triggerBuild",
+          "definition": {
+            "kind": "synchronous",
+            "handler": "https://api.northstack.io/api/v1/graphql-actions",
+            "type": "mutation",
+            "arguments": [
+              {"name": "serviceId", "type": "uuid!"},
+              {"name": "branch", "type": "String"}
+            ],
+            "output_type": "Build"
+          },
+          "permissions": [{"role": "user"}, {"role": "admin"}]
+        },
+        {
+          "name": "scaleService",
+          "definition": {
+            "kind": "synchronous",
+            "handler": "https://api.northstack.io/api/v1/graphql-actions",
+            "type": "mutation",
+            "arguments": [
+              {"name": "serviceId", "type": "uuid!"},
+              {"name": "replicas", "type": "Int!"}
+            ],
+            "output_type": "Service"
+          },
+          "permissions": [{"role": "user"}, {"role": "admin"}]
+        },
+        {
+          "name": "createDatabase",
+          "definition": {
+            "kind": "synchronous",
+            "handler": "https://api.northstack.io/api/v1/graphql-actions",
+            "type": "mutation",
+            "arguments": [
+              {"name": "projectId", "type": "uuid!"},
+              {"name": "name", "type": "String!"},
+              {"name": "size", "type": "String!"},
+              {"name": "highAvailability", "type": "Boolean"}
+            ],
+            "output_type": "Database"
+          },
+          "permissions": [{"role": "admin"}]
+        }
+      ],
+      "custom_types": {
+        "objects": [
+          {
+            "name": "Build",
+            "fields": [
+              {"name": "id", "type": "uuid!"},
+              {"name": "status", "type": "String!"},
+              {"name": "started_at", "type": "timestamptz"}
+            ]
+          },
+          {
+            "name": "Service",
+            "fields": [
+              {"name": "id", "type": "uuid!"},
+              {"name": "name", "type": "String!"},
+              {"name": "replicas", "type": "Int!"}
+            ]
+          },
+          {
+            "name": "Database",
+            "fields": [
+              {"name": "id", "type": "String!"},
+              {"name": "name", "type": "String!"},
+              {"name": "status", "type": "String!"}
+            ]
+          }
+        ]
+      },
+      "inherited_roles": [
+        {
+          "role_name": "manager",
+          "role_set": ["user", "viewer"]
+        }
+      ],
+      "allowlist": [
+        {"collection": "allowed_queries", "scope": {"global": true}}
+      ],
+      "query_collections": [
+        {
+          "name": "allowed_queries",
+          "definition": {
+            "queries": [
+              {
+                "name": "GetMyProjects",
+                "query": "query GetMyProjects { projects { id name slug status services { id name status } } }"
+              },
+              {
+                "name": "GetServiceDetails",
+                "query": "query GetServiceDetails($id: uuid!) { services_by_pk(id: $id) { id name type status builds(limit: 5, order_by: {created_at: desc}) { id status } } }"
+              }
+            ]
+          }
+        }
+      ],
+      "rest_endpoints": [
+        {
+          "name": "GetProjects",
+          "url": "projects",
+          "methods": ["GET"],
+          "definition": {
+            "query": {"query_name": "GetMyProjects", "collection_name": "allowed_queries"}
+          }
+        }
+      ]
+    }
+
+---
+# Event Triggers for real-time updates
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hasura-event-triggers
+  namespace: northstack-hasura
+data:
+  event_triggers.json: |
+    {
+      "event_triggers": [
+        {
+          "name": "service_status_changed",
+          "table": {"schema": "public", "name": "services"},
+          "webhook": "https://api.northstack.io/api/v1/webhooks/hasura",
+          "insert": {"columns": "*"},
+          "update": {"columns": ["status"]},
+          "headers": [
+            {"name": "X-Hasura-Event-Secret", "value_from_env": "HASURA_EVENT_SECRET"}
+          ],
+          "retry_conf": {
+            "num_retries": 3,
+            "interval_sec": 10,
+            "timeout_sec": 60
+          }
+        },
+        {
+          "name": "build_completed",
+          "table": {"schema": "public", "name": "builds"},
+          "webhook": "https://api.northstack.io/api/v1/webhooks/hasura",
+          "update": {"columns": ["status"]},
+          "headers": [
+            {"name": "X-Hasura-Event-Secret", "value_from_env": "HASURA_EVENT_SECRET"}
+          ]
+        },
+        {
+          "name": "deployment_completed",
+          "table": {"schema": "public", "name": "deployments"},
+          "webhook": "https://api.northstack.io/api/v1/webhooks/hasura",
+          "update": {"columns": ["status"]},
+          "headers": [
+            {"name": "X-Hasura-Event-Secret", "value_from_env": "HASURA_EVENT_SECRET"}
+          ]
+        }
+      ]
+    }

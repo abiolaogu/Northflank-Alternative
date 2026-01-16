@@ -9,8 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/openpaas/platform-orchestrator/internal/config"
-	"github.com/openpaas/platform-orchestrator/pkg/logger"
+	"github.com/northstack/platform/internal/config"
+	"github.com/northstack/platform/pkg/logger"
 )
 
 // PostgresDB wraps a pgxpool for database operations

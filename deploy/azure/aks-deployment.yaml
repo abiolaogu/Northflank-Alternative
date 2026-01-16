@@ -1,0 +1,180 @@
+# NorthStack Platform - Azure AKS Deployment
+# Azure Kubernetes Service
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: northstack
+  labels:
+    app.kubernetes.io/name: northstack
+    app.kubernetes.io/managed-by: aks
+
+---
+# StorageClass for Azure Disk
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: northstack-azure-premium
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: Premium_LRS
+  cachingMode: ReadOnly
+  enableBursting: "true"
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+# API Deployment with AKS-specific configs
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: northstack-api
+  namespace: northstack
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: northstack-api
+  template:
+    metadata:
+      labels:
+        app: northstack-api
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: northstack-api
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: northstack-api
+      containers:
+        - name: api
+          image: ghcr.io/northstack/platform:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: AZURE_SUBSCRIPTION_ID
+              value: "00000000-0000-0000-0000-000000000000"
+            - name: ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: northstack-secrets
+                  key: database-url
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# Service with Azure annotations
+apiVersion: v1
+kind: Service
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+    service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: "/health/ready"
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 443
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: northstack-api
+
+---
+# Azure Application Gateway Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    kubernetes.io/ingress.class: azure/application-gateway
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    appgw.ingress.kubernetes.io/health-probe-path: "/health/ready"
+    appgw.ingress.kubernetes.io/waf-policy-for-path: "/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies/northstack-waf"
+spec:
+  tls:
+    - hosts:
+        - api.northstack.io
+      secretName: northstack-tls
+  rules:
+    - host: api.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: northstack-api
+                port:
+                  number: 8080
+
+---
+# Service Account with Workload Identity
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: northstack-api
+  namespace: northstack
+  annotations:
+    azure.workload.identity/client-id: "00000000-0000-0000-0000-000000000000"
+
+---
+# SecretProviderClass for Azure Key Vault
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: northstack-secrets
+  namespace: northstack
+spec:
+  provider: azure
+  parameters:
+    usePodIdentity: "false"
+    useVMManagedIdentity: "true"
+    userAssignedIdentityID: "00000000-0000-0000-0000-000000000000"
+    keyvaultName: northstack-keyvault
+    objects: |
+      array:
+        - |
+          objectName: database-url
+          objectType: secret
+        - |
+          objectName: jwt-secret
+          objectType: secret
+    tenantId: "00000000-0000-0000-0000-000000000000"
+  secretObjects:
+    - secretName: northstack-secrets
+      type: Opaque
+      data:
+        - objectName: database-url
+          key: database-url
+        - objectName: jwt-secret
+          key: jwt-secret

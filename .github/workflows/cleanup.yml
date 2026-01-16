@@ -1,0 +1,42 @@
+name: Cleanup Preview Environment
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    name: Cleanup Resources
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Coolify Preview Application
+        run: |
+          echo "Cleaning up Coolify preview for PR #${{ github.event.number }}"
+          
+          curl -X DELETE "${{ secrets.COOLIFY_URL }}/api/v1/applications/pr-${{ github.event.number }}-${{ github.event.repository.name }}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}" \
+            --fail-with-body || echo "Coolify cleanup failed (may not exist)"
+
+      - name: Delete Preview Namespace
+        run: |
+          curl -X DELETE "${{ secrets.NORTHSTACK_API_URL }}/api/v1/previews/pr-${{ github.event.number }}" \
+            -H "Authorization: Bearer ${{ secrets.NORTHSTACK_API_TOKEN }}" \
+            --fail-with-body || echo "Preview cleanup failed (may not exist)"
+
+      - name: Comment PR with Cleanup Notice
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.issue.number;
+            const merged = context.payload.pull_request.merged;
+            
+            const emoji = merged ? '🎉' : '🧹';
+            const action = merged ? 'merged' : 'closed';
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `${emoji} PR ${action}! Preview environment has been cleaned up.
+              
+              ${merged ? '**Deployed to production!** View at: https://' + context.repo.repo + '.northstack.io' : ''}`
+            });

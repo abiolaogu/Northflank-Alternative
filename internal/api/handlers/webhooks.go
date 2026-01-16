@@ -8,9 +8,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/openpaas/platform-orchestrator/internal/domain"
-	"github.com/openpaas/platform-orchestrator/pkg/errors"
-	"github.com/openpaas/platform-orchestrator/pkg/logger"
+	"github.com/northstack/platform/internal/domain"
+	"github.com/northstack/platform/pkg/errors"
+	"github.com/northstack/platform/pkg/logger"
 )
 
 // WebhookHandler handles incoming webhooks from external services
