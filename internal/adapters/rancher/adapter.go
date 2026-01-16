@@ -45,30 +45,30 @@ func NewAdapter(cfg *config.RancherConfig, log *logger.Logger) *Adapter {
 
 // rancherCluster represents a cluster in Rancher's API
 type rancherCluster struct {
-	ID                       string                 `json:"id,omitempty"`
-	Name                     string                 `json:"name"`
-	Description              string                 `json:"description,omitempty"`
-	State                    string                 `json:"state,omitempty"`
-	Provider                 string                 `json:"provider,omitempty"`
-	KubernetesVersion        string                 `json:"kubernetesVersion,omitempty"`
-	NodeCount                int32                  `json:"nodeCount,omitempty"`
-	Transitioning            string                 `json:"transitioning,omitempty"`
-	TransitioningMessage     string                 `json:"transitioningMessage,omitempty"`
-	APIEndpoint              string                 `json:"apiEndpoint,omitempty"`
-	Labels                   map[string]string      `json:"labels,omitempty"`
-	Annotations              map[string]string      `json:"annotations,omitempty"`
-	RancherKubernetesEngineConfig *rkeConfig        `json:"rancherKubernetesEngineConfig,omitempty"`
-	AmazonElasticContainerServiceConfig *eksConfig  `json:"amazonElasticContainerServiceConfig,omitempty"`
-	GoogleKubernetesEngineConfig *gkeConfig         `json:"googleKubernetesEngineConfig,omitempty"`
-	AzureKubernetesServiceConfig *aksConfig         `json:"azureKubernetesServiceConfig,omitempty"`
+	ID                                  string            `json:"id,omitempty"`
+	Name                                string            `json:"name"`
+	Description                         string            `json:"description,omitempty"`
+	State                               string            `json:"state,omitempty"`
+	Provider                            string            `json:"provider,omitempty"`
+	KubernetesVersion                   string            `json:"kubernetesVersion,omitempty"`
+	NodeCount                           int32             `json:"nodeCount,omitempty"`
+	Transitioning                       string            `json:"transitioning,omitempty"`
+	TransitioningMessage                string            `json:"transitioningMessage,omitempty"`
+	APIEndpoint                         string            `json:"apiEndpoint,omitempty"`
+	Labels                              map[string]string `json:"labels,omitempty"`
+	Annotations                         map[string]string `json:"annotations,omitempty"`
+	RancherKubernetesEngineConfig       *rkeConfig        `json:"rancherKubernetesEngineConfig,omitempty"`
+	AmazonElasticContainerServiceConfig *eksConfig        `json:"amazonElasticContainerServiceConfig,omitempty"`
+	GoogleKubernetesEngineConfig        *gkeConfig        `json:"googleKubernetesEngineConfig,omitempty"`
+	AzureKubernetesServiceConfig        *aksConfig        `json:"azureKubernetesServiceConfig,omitempty"`
 }
 
 // rkeConfig represents RKE2/K3s cluster configuration
 type rkeConfig struct {
-	KubernetesVersion string                   `json:"kubernetesVersion,omitempty"`
-	Network           *networkConfig           `json:"network,omitempty"`
-	Nodes             []rkeNode                `json:"nodes,omitempty"`
-	Services          map[string]interface{}   `json:"services,omitempty"`
+	KubernetesVersion string                 `json:"kubernetesVersion,omitempty"`
+	Network           *networkConfig         `json:"network,omitempty"`
+	Nodes             []rkeNode              `json:"nodes,omitempty"`
+	Services          map[string]interface{} `json:"services,omitempty"`
 }
 
 // networkConfig represents network configuration for RKE
@@ -79,39 +79,39 @@ type networkConfig struct {
 
 // rkeNode represents a node in an RKE cluster
 type rkeNode struct {
-	Address          string   `json:"address"`
-	User             string   `json:"user,omitempty"`
-	Role             []string `json:"role,omitempty"`
-	SSHKeyPath       string   `json:"sshKeyPath,omitempty"`
-	InternalAddress  string   `json:"internalAddress,omitempty"`
+	Address         string   `json:"address"`
+	User            string   `json:"user,omitempty"`
+	Role            []string `json:"role,omitempty"`
+	SSHKeyPath      string   `json:"sshKeyPath,omitempty"`
+	InternalAddress string   `json:"internalAddress,omitempty"`
 }
 
 // eksConfig represents EKS cluster configuration
 type eksConfig struct {
-	Region                  string   `json:"region"`
-	KubernetesVersion       string   `json:"kubernetesVersion,omitempty"`
-	NodeGroups              []nodeGroup `json:"nodeGroups,omitempty"`
-	VPC                     string   `json:"vpc,omitempty"`
-	Subnets                 []string `json:"subnets,omitempty"`
+	Region            string      `json:"region"`
+	KubernetesVersion string      `json:"kubernetesVersion,omitempty"`
+	NodeGroups        []nodeGroup `json:"nodeGroups,omitempty"`
+	VPC               string      `json:"vpc,omitempty"`
+	Subnets           []string    `json:"subnets,omitempty"`
 }
 
 // gkeConfig represents GKE cluster configuration
 type gkeConfig struct {
-	Zone                    string   `json:"zone"`
-	Region                  string   `json:"region"`
-	KubernetesVersion       string   `json:"kubernetesVersion,omitempty"`
-	NodePools               []nodePool `json:"nodePools,omitempty"`
-	Network                 string   `json:"network,omitempty"`
-	Subnetwork              string   `json:"subnetwork,omitempty"`
+	Zone              string     `json:"zone"`
+	Region            string     `json:"region"`
+	KubernetesVersion string     `json:"kubernetesVersion,omitempty"`
+	NodePools         []nodePool `json:"nodePools,omitempty"`
+	Network           string     `json:"network,omitempty"`
+	Subnetwork        string     `json:"subnetwork,omitempty"`
 }
 
 // aksConfig represents AKS cluster configuration
 type aksConfig struct {
-	Location                string   `json:"location"`
-	KubernetesVersion       string   `json:"kubernetesVersion,omitempty"`
-	NodePools               []nodePool `json:"nodePools,omitempty"`
-	ResourceGroup           string   `json:"resourceGroup,omitempty"`
-	VirtualNetwork          string   `json:"virtualNetwork,omitempty"`
+	Location          string     `json:"location"`
+	KubernetesVersion string     `json:"kubernetesVersion,omitempty"`
+	NodePools         []nodePool `json:"nodePools,omitempty"`
+	ResourceGroup     string     `json:"resourceGroup,omitempty"`
+	VirtualNetwork    string     `json:"virtualNetwork,omitempty"`
 }
 
 // nodeGroup represents a node group for EKS
@@ -125,12 +125,12 @@ type nodeGroup struct {
 
 // nodePool represents a node pool for GKE/AKS
 type nodePool struct {
-	Name              string `json:"name"`
-	MachineType       string `json:"machineType,omitempty"`
-	InitialNodeCount  int32  `json:"initialNodeCount,omitempty"`
-	MinNodeCount      int32  `json:"minNodeCount,omitempty"`
-	MaxNodeCount      int32  `json:"maxNodeCount,omitempty"`
-	AutoScaling       bool   `json:"autoScaling,omitempty"`
+	Name             string `json:"name"`
+	MachineType      string `json:"machineType,omitempty"`
+	InitialNodeCount int32  `json:"initialNodeCount,omitempty"`
+	MinNodeCount     int32  `json:"minNodeCount,omitempty"`
+	MaxNodeCount     int32  `json:"maxNodeCount,omitempty"`
+	AutoScaling      bool   `json:"autoScaling,omitempty"`
 }
 
 // clusterCondition represents a cluster condition
@@ -313,12 +313,12 @@ func (a *Adapter) GetClusterHealth(ctx context.Context, externalID string) (*dom
 	}
 
 	var rCluster struct {
-		State            string             `json:"state"`
-		NodeCount        int32              `json:"nodeCount"`
-		ComponentStatus  []clusterCondition `json:"componentStatuses"`
-		Conditions       []clusterCondition `json:"conditions"`
-		Allocatable      map[string]string  `json:"allocatable"`
-		Requested        map[string]string  `json:"requested"`
+		State           string             `json:"state"`
+		NodeCount       int32              `json:"nodeCount"`
+		ComponentStatus []clusterCondition `json:"componentStatuses"`
+		Conditions      []clusterCondition `json:"conditions"`
+		Allocatable     map[string]string  `json:"allocatable"`
+		Requested       map[string]string  `json:"requested"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&rCluster); err != nil {
 		return nil, errors.Wrap(err, "failed to decode response")

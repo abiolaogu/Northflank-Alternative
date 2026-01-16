@@ -98,6 +98,9 @@ func main() {
 	rancherAdapter := rancher.NewAdapter(&cfg.Rancher, log)
 	argocdAdapter := argocd.NewAdapter(&cfg.ArgoCD, log)
 
+	// TODO: Integrate rancherAdapter with cluster management endpoints
+	_ = rancherAdapter
+
 	// Authenticate with ArgoCD if configured
 	if cfg.ArgoCD.Username != "" || cfg.ArgoCD.Token != "" {
 		if err := argocdAdapter.Authenticate(ctx); err != nil {
@@ -202,6 +205,3 @@ func setupEventSubscriptions(ctx context.Context, bus *eventbus.NATSEventBus, sm
 		return nil
 	})
 }
-
-// Suppress unused import warning
-var _ = rancherAdapter

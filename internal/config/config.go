@@ -63,19 +63,19 @@ func (c *DatabaseConfig) DSN() string {
 
 // NATSConfig holds NATS configuration
 type NATSConfig struct {
-	URL             string        `mapstructure:"url"`
-	ClusterID       string        `mapstructure:"cluster_id"`
-	ClientID        string        `mapstructure:"client_id"`
-	Token           string        `mapstructure:"token"`
-	Username        string        `mapstructure:"username"`
-	Password        string        `mapstructure:"password"`
-	TLSEnabled      bool          `mapstructure:"tls_enabled"`
-	TLSCertFile     string        `mapstructure:"tls_cert_file"`
-	TLSKeyFile      string        `mapstructure:"tls_key_file"`
-	TLSCAFile       string        `mapstructure:"tls_ca_file"`
-	ReconnectWait   time.Duration `mapstructure:"reconnect_wait"`
-	MaxReconnects   int           `mapstructure:"max_reconnects"`
-	JetStreamEnabled bool         `mapstructure:"jetstream_enabled"`
+	URL              string        `mapstructure:"url"`
+	ClusterID        string        `mapstructure:"cluster_id"`
+	ClientID         string        `mapstructure:"client_id"`
+	Token            string        `mapstructure:"token"`
+	Username         string        `mapstructure:"username"`
+	Password         string        `mapstructure:"password"`
+	TLSEnabled       bool          `mapstructure:"tls_enabled"`
+	TLSCertFile      string        `mapstructure:"tls_cert_file"`
+	TLSKeyFile       string        `mapstructure:"tls_key_file"`
+	TLSCAFile        string        `mapstructure:"tls_ca_file"`
+	ReconnectWait    time.Duration `mapstructure:"reconnect_wait"`
+	MaxReconnects    int           `mapstructure:"max_reconnects"`
+	JetStreamEnabled bool          `mapstructure:"jetstream_enabled"`
 }
 
 // CoolifyConfig holds Coolify CI/Build integration configuration
@@ -89,35 +89,35 @@ type CoolifyConfig struct {
 
 // RancherConfig holds Rancher cluster management configuration
 type RancherConfig struct {
-	URL             string        `mapstructure:"url"`
-	AccessKey       string        `mapstructure:"access_key"`
-	SecretKey       string        `mapstructure:"secret_key"`
-	Token           string        `mapstructure:"token"`
-	Timeout         time.Duration `mapstructure:"timeout"`
-	TLSSkipVerify   bool          `mapstructure:"tls_skip_verify"`
-	DefaultProject  string        `mapstructure:"default_project"`
+	URL            string        `mapstructure:"url"`
+	AccessKey      string        `mapstructure:"access_key"`
+	SecretKey      string        `mapstructure:"secret_key"`
+	Token          string        `mapstructure:"token"`
+	Timeout        time.Duration `mapstructure:"timeout"`
+	TLSSkipVerify  bool          `mapstructure:"tls_skip_verify"`
+	DefaultProject string        `mapstructure:"default_project"`
 }
 
 // ArgoCDConfig holds ArgoCD GitOps configuration
 type ArgoCDConfig struct {
-	URL              string        `mapstructure:"url"`
-	Username         string        `mapstructure:"username"`
-	Password         string        `mapstructure:"password"`
-	Token            string        `mapstructure:"token"`
-	Timeout          time.Duration `mapstructure:"timeout"`
-	TLSSkipVerify    bool          `mapstructure:"tls_skip_verify"`
-	AppProject       string        `mapstructure:"app_project"`
-	RepoURL          string        `mapstructure:"repo_url"`
-	TargetRevision   string        `mapstructure:"target_revision"`
-	SyncPolicy       SyncPolicy    `mapstructure:"sync_policy"`
+	URL            string        `mapstructure:"url"`
+	Username       string        `mapstructure:"username"`
+	Password       string        `mapstructure:"password"`
+	Token          string        `mapstructure:"token"`
+	Timeout        time.Duration `mapstructure:"timeout"`
+	TLSSkipVerify  bool          `mapstructure:"tls_skip_verify"`
+	AppProject     string        `mapstructure:"app_project"`
+	RepoURL        string        `mapstructure:"repo_url"`
+	TargetRevision string        `mapstructure:"target_revision"`
+	SyncPolicy     SyncPolicy    `mapstructure:"sync_policy"`
 }
 
 // SyncPolicy defines ArgoCD sync policy
 type SyncPolicy struct {
-	Automated      bool `mapstructure:"automated"`
-	Prune          bool `mapstructure:"prune"`
-	SelfHeal       bool `mapstructure:"self_heal"`
-	AllowEmpty     bool `mapstructure:"allow_empty"`
+	Automated  bool `mapstructure:"automated"`
+	Prune      bool `mapstructure:"prune"`
+	SelfHeal   bool `mapstructure:"self_heal"`
+	AllowEmpty bool `mapstructure:"allow_empty"`
 }
 
 // VaultConfig holds HashiCorp Vault configuration
@@ -137,17 +137,17 @@ type VaultConfig struct {
 
 // AuthConfig holds authentication configuration
 type AuthConfig struct {
-	JWTSecret          string        `mapstructure:"jwt_secret"`
-	JWTExpiration      time.Duration `mapstructure:"jwt_expiration"`
-	RefreshExpiration  time.Duration `mapstructure:"refresh_expiration"`
-	SessionTimeout     time.Duration `mapstructure:"session_timeout"`
-	BCryptCost         int           `mapstructure:"bcrypt_cost"`
-	OAuthEnabled       bool          `mapstructure:"oauth_enabled"`
-	OAuthProviders     []OAuthProvider `mapstructure:"oauth_providers"`
-	APIKeyEnabled      bool          `mapstructure:"api_key_enabled"`
-	RateLimitEnabled   bool          `mapstructure:"rate_limit_enabled"`
-	RateLimitRequests  int           `mapstructure:"rate_limit_requests"`
-	RateLimitWindow    time.Duration `mapstructure:"rate_limit_window"`
+	JWTSecret         string          `mapstructure:"jwt_secret"`
+	JWTExpiration     time.Duration   `mapstructure:"jwt_expiration"`
+	RefreshExpiration time.Duration   `mapstructure:"refresh_expiration"`
+	SessionTimeout    time.Duration   `mapstructure:"session_timeout"`
+	BCryptCost        int             `mapstructure:"bcrypt_cost"`
+	OAuthEnabled      bool            `mapstructure:"oauth_enabled"`
+	OAuthProviders    []OAuthProvider `mapstructure:"oauth_providers"`
+	APIKeyEnabled     bool            `mapstructure:"api_key_enabled"`
+	RateLimitEnabled  bool            `mapstructure:"rate_limit_enabled"`
+	RateLimitRequests int             `mapstructure:"rate_limit_requests"`
+	RateLimitWindow   time.Duration   `mapstructure:"rate_limit_window"`
 }
 
 // OAuthProvider defines an OAuth provider configuration
@@ -164,12 +164,12 @@ type OAuthProvider struct {
 
 // MetricsConfig holds metrics and monitoring configuration
 type MetricsConfig struct {
-	Enabled        bool   `mapstructure:"enabled"`
-	Path           string `mapstructure:"path"`
-	PrometheusURL  string `mapstructure:"prometheus_url"`
-	GrafanaURL     string `mapstructure:"grafana_url"`
+	Enabled         bool   `mapstructure:"enabled"`
+	Path            string `mapstructure:"path"`
+	PrometheusURL   string `mapstructure:"prometheus_url"`
+	GrafanaURL      string `mapstructure:"grafana_url"`
 	AlertmanagerURL string `mapstructure:"alertmanager_url"`
-	LokiURL        string `mapstructure:"loki_url"`
+	LokiURL         string `mapstructure:"loki_url"`
 }
 
 // LoggingConfig holds logging configuration
@@ -178,16 +178,16 @@ type LoggingConfig struct {
 	Format     string `mapstructure:"format"` // json, console
 	Output     string `mapstructure:"output"` // stdout, stderr, file
 	FilePath   string `mapstructure:"file_path"`
-	MaxSize    int    `mapstructure:"max_size"`    // megabytes
+	MaxSize    int    `mapstructure:"max_size"` // megabytes
 	MaxBackups int    `mapstructure:"max_backups"`
-	MaxAge     int    `mapstructure:"max_age"`     // days
+	MaxAge     int    `mapstructure:"max_age"` // days
 	Compress   bool   `mapstructure:"compress"`
 }
 
 // KubernetesConfig holds Kubernetes client configuration
 type KubernetesConfig struct {
-	InCluster      bool   `mapstructure:"in_cluster"`
-	KubeConfigPath string `mapstructure:"kubeconfig_path"`
+	InCluster      bool          `mapstructure:"in_cluster"`
+	KubeConfigPath string        `mapstructure:"kubeconfig_path"`
 	DefaultTimeout time.Duration `mapstructure:"default_timeout"`
 }
 

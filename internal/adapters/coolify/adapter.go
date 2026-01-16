@@ -47,18 +47,18 @@ type coolifyProject struct {
 
 // coolifyApplication represents an application in Coolify's API
 type coolifyApplication struct {
-	ID                 string            `json:"id,omitempty"`
-	Name               string            `json:"name"`
-	ProjectID          string            `json:"project_id"`
-	EnvironmentID      string            `json:"environment_id"`
-	GitRepository      string            `json:"git_repository,omitempty"`
-	GitBranch          string            `json:"git_branch,omitempty"`
-	BuildPack          string            `json:"build_pack,omitempty"`
-	DockerfilePath     string            `json:"dockerfile_path,omitempty"`
-	DockerRegistryURL  string            `json:"docker_registry_url,omitempty"`
-	DockerImageTag     string            `json:"docker_image_tag,omitempty"`
-	PortsExposes       string            `json:"ports_exposes,omitempty"`
-	Domains            string            `json:"domains,omitempty"`
+	ID                   string            `json:"id,omitempty"`
+	Name                 string            `json:"name"`
+	ProjectID            string            `json:"project_id"`
+	EnvironmentID        string            `json:"environment_id"`
+	GitRepository        string            `json:"git_repository,omitempty"`
+	GitBranch            string            `json:"git_branch,omitempty"`
+	BuildPack            string            `json:"build_pack,omitempty"`
+	DockerfilePath       string            `json:"dockerfile_path,omitempty"`
+	DockerRegistryURL    string            `json:"docker_registry_url,omitempty"`
+	DockerImageTag       string            `json:"docker_image_tag,omitempty"`
+	PortsExposes         string            `json:"ports_exposes,omitempty"`
+	Domains              string            `json:"domains,omitempty"`
 	EnvironmentVariables map[string]string `json:"environment_variables,omitempty"`
 }
 

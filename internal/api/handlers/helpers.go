@@ -98,11 +98,11 @@ func (h *HealthHandler) Ready(c *gin.Context) {
 		Version:     h.version,
 		Environment: h.env,
 		Services: map[string]string{
-			"database":  "ok",
-			"nats":      "ok",
-			"coolify":   "ok",
-			"rancher":   "ok",
-			"argocd":    "ok",
+			"database": "ok",
+			"nats":     "ok",
+			"coolify":  "ok",
+			"rancher":  "ok",
+			"argocd":   "ok",
 		},
 	})
 }

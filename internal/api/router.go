@@ -128,12 +128,16 @@ func (r *Router) Setup() *gin.Engine {
 }
 
 // Placeholder handlers - implement fully in production
-func (r *Router) handleLogin(c *gin.Context)            { c.JSON(200, gin.H{"message": "login endpoint"}) }
-func (r *Router) handleRegister(c *gin.Context)         { c.JSON(200, gin.H{"message": "register endpoint"}) }
-func (r *Router) handleWebhook(c *gin.Context)          { c.JSON(200, gin.H{"message": "webhook received"}) }
-func (r *Router) handleCreateCluster(c *gin.Context)    { c.JSON(200, gin.H{"message": "create cluster"}) }
-func (r *Router) handleListClusters(c *gin.Context)     { c.JSON(200, gin.H{"message": "list clusters"}) }
-func (r *Router) handleGetCluster(c *gin.Context)       { c.JSON(200, gin.H{"message": "get cluster"}) }
-func (r *Router) handleDeleteCluster(c *gin.Context)    { c.JSON(200, gin.H{"message": "delete cluster"}) }
-func (r *Router) handleGetCurrentUser(c *gin.Context)   { c.JSON(200, gin.H{"message": "get current user"}) }
-func (r *Router) handleUpdateCurrentUser(c *gin.Context){ c.JSON(200, gin.H{"message": "update current user"}) }
+func (r *Router) handleLogin(c *gin.Context)         { c.JSON(200, gin.H{"message": "login endpoint"}) }
+func (r *Router) handleRegister(c *gin.Context)      { c.JSON(200, gin.H{"message": "register endpoint"}) }
+func (r *Router) handleWebhook(c *gin.Context)       { c.JSON(200, gin.H{"message": "webhook received"}) }
+func (r *Router) handleCreateCluster(c *gin.Context) { c.JSON(200, gin.H{"message": "create cluster"}) }
+func (r *Router) handleListClusters(c *gin.Context)  { c.JSON(200, gin.H{"message": "list clusters"}) }
+func (r *Router) handleGetCluster(c *gin.Context)    { c.JSON(200, gin.H{"message": "get cluster"}) }
+func (r *Router) handleDeleteCluster(c *gin.Context) { c.JSON(200, gin.H{"message": "delete cluster"}) }
+func (r *Router) handleGetCurrentUser(c *gin.Context) {
+	c.JSON(200, gin.H{"message": "get current user"})
+}
+func (r *Router) handleUpdateCurrentUser(c *gin.Context) {
+	c.JSON(200, gin.H{"message": "update current user"})
+}

@@ -102,23 +102,23 @@ type PortRequest struct {
 
 // ServiceResponse represents the response body for a service
 type ServiceResponse struct {
-	ID             uuid.UUID              `json:"id"`
-	ProjectID      uuid.UUID              `json:"project_id"`
-	Name           string                 `json:"name"`
-	Slug           string                 `json:"slug"`
-	Type           string                 `json:"type"`
-	Status         string                 `json:"status"`
-	BuildSource    domain.BuildSource     `json:"build_source"`
-	Resources      domain.ResourceLimits  `json:"resources"`
-	Scaling        domain.ScalingConfig   `json:"scaling"`
-	HealthCheck    *domain.HealthCheck    `json:"health_check,omitempty"`
-	EnvVars        map[string]string      `json:"env_vars,omitempty"`
-	SecretRefs     []string               `json:"secret_refs,omitempty"`
-	Ports          []domain.ServicePort   `json:"ports,omitempty"`
-	Labels         map[string]string      `json:"labels,omitempty"`
-	CurrentVersion string                 `json:"current_version,omitempty"`
-	CreatedAt      time.Time              `json:"created_at"`
-	UpdatedAt      time.Time              `json:"updated_at"`
+	ID             uuid.UUID             `json:"id"`
+	ProjectID      uuid.UUID             `json:"project_id"`
+	Name           string                `json:"name"`
+	Slug           string                `json:"slug"`
+	Type           string                `json:"type"`
+	Status         string                `json:"status"`
+	BuildSource    domain.BuildSource    `json:"build_source"`
+	Resources      domain.ResourceLimits `json:"resources"`
+	Scaling        domain.ScalingConfig  `json:"scaling"`
+	HealthCheck    *domain.HealthCheck   `json:"health_check,omitempty"`
+	EnvVars        map[string]string     `json:"env_vars,omitempty"`
+	SecretRefs     []string              `json:"secret_refs,omitempty"`
+	Ports          []domain.ServicePort  `json:"ports,omitempty"`
+	Labels         map[string]string     `json:"labels,omitempty"`
+	CurrentVersion string                `json:"current_version,omitempty"`
+	CreatedAt      time.Time             `json:"created_at"`
+	UpdatedAt      time.Time             `json:"updated_at"`
 }
 
 // Create handles POST /projects/:project_id/services

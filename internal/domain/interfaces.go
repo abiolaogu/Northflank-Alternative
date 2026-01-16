@@ -20,13 +20,13 @@ type ProjectRepository interface {
 
 // ProjectFilter defines filtering options for listing projects
 type ProjectFilter struct {
-	OwnerID  *uuid.UUID
-	TeamID   *uuid.UUID
-	Status   *ProjectStatus
-	Labels   map[string]string
-	Search   string
-	Limit    int
-	Offset   int
+	OwnerID *uuid.UUID
+	TeamID  *uuid.UUID
+	Status  *ProjectStatus
+	Labels  map[string]string
+	Search  string
+	Limit   int
+	Offset  int
 }
 
 // ServiceRepository defines the interface for service persistence
@@ -42,12 +42,12 @@ type ServiceRepository interface {
 
 // ServiceFilter defines filtering options for listing services
 type ServiceFilter struct {
-	Type    *ServiceType
-	Status  *ServiceStatus
-	Labels  map[string]string
-	Search  string
-	Limit   int
-	Offset  int
+	Type   *ServiceType
+	Status *ServiceStatus
+	Labels map[string]string
+	Search string
+	Limit  int
+	Offset int
 }
 
 // BuildRepository defines the interface for build persistence
@@ -212,11 +212,11 @@ type ClusterManagerAdapter interface {
 
 // ClusterHealth represents the health status of a cluster
 type ClusterHealth struct {
-	Status      ClusterStatus     `json:"status"`
-	NodeCount   int32             `json:"node_count"`
-	ReadyNodes  int32             `json:"ready_nodes"`
-	CPUUsage    float64           `json:"cpu_usage"`
-	MemoryUsage float64           `json:"memory_usage"`
+	Status      ClusterStatus      `json:"status"`
+	NodeCount   int32              `json:"node_count"`
+	ReadyNodes  int32              `json:"ready_nodes"`
+	CPUUsage    float64            `json:"cpu_usage"`
+	MemoryUsage float64            `json:"memory_usage"`
 	Conditions  []ClusterCondition `json:"conditions"`
 }
 
@@ -247,12 +247,12 @@ type GitOpsAdapter interface {
 
 // ApplicationStatus represents the status of a GitOps application
 type ApplicationStatus struct {
-	Health        string    `json:"health"`
-	SyncStatus    string    `json:"sync_status"`
-	CurrentImage  string    `json:"current_image"`
-	DesiredImage  string    `json:"desired_image"`
-	Replicas      int32     `json:"replicas"`
-	ReadyReplicas int32     `json:"ready_replicas"`
+	Health        string           `json:"health"`
+	SyncStatus    string           `json:"sync_status"`
+	CurrentImage  string           `json:"current_image"`
+	DesiredImage  string           `json:"desired_image"`
+	Replicas      int32            `json:"replicas"`
+	ReadyReplicas int32            `json:"ready_replicas"`
 	Resources     []ResourceStatus `json:"resources"`
 }
 
@@ -352,33 +352,33 @@ type TimeRange struct {
 
 // ServiceMetrics represents metrics for a service
 type ServiceMetrics struct {
-	ServiceID     uuid.UUID       `json:"service_id"`
-	CPUUsage      []MetricPoint   `json:"cpu_usage"`
-	MemoryUsage   []MetricPoint   `json:"memory_usage"`
-	RequestCount  []MetricPoint   `json:"request_count"`
-	ErrorRate     []MetricPoint   `json:"error_rate"`
-	Latency       LatencyMetrics  `json:"latency"`
-	Replicas      []MetricPoint   `json:"replicas"`
+	ServiceID    uuid.UUID      `json:"service_id"`
+	CPUUsage     []MetricPoint  `json:"cpu_usage"`
+	MemoryUsage  []MetricPoint  `json:"memory_usage"`
+	RequestCount []MetricPoint  `json:"request_count"`
+	ErrorRate    []MetricPoint  `json:"error_rate"`
+	Latency      LatencyMetrics `json:"latency"`
+	Replicas     []MetricPoint  `json:"replicas"`
 }
 
 // ClusterMetrics represents metrics for a cluster
 type ClusterMetrics struct {
-	ClusterID     uuid.UUID     `json:"cluster_id"`
-	CPUUsage      []MetricPoint `json:"cpu_usage"`
-	MemoryUsage   []MetricPoint `json:"memory_usage"`
-	PodCount      []MetricPoint `json:"pod_count"`
-	NodeCount     int32         `json:"node_count"`
-	DiskUsage     []MetricPoint `json:"disk_usage"`
+	ClusterID   uuid.UUID     `json:"cluster_id"`
+	CPUUsage    []MetricPoint `json:"cpu_usage"`
+	MemoryUsage []MetricPoint `json:"memory_usage"`
+	PodCount    []MetricPoint `json:"pod_count"`
+	NodeCount   int32         `json:"node_count"`
+	DiskUsage   []MetricPoint `json:"disk_usage"`
 }
 
 // ProjectMetrics represents aggregated metrics for a project
 type ProjectMetrics struct {
-	ProjectID      uuid.UUID     `json:"project_id"`
-	ServiceCount   int           `json:"service_count"`
-	TotalCPU       []MetricPoint `json:"total_cpu"`
-	TotalMemory    []MetricPoint `json:"total_memory"`
-	TotalRequests  []MetricPoint `json:"total_requests"`
-	TotalErrors    []MetricPoint `json:"total_errors"`
+	ProjectID     uuid.UUID     `json:"project_id"`
+	ServiceCount  int           `json:"service_count"`
+	TotalCPU      []MetricPoint `json:"total_cpu"`
+	TotalMemory   []MetricPoint `json:"total_memory"`
+	TotalRequests []MetricPoint `json:"total_requests"`
+	TotalErrors   []MetricPoint `json:"total_errors"`
 }
 
 // MetricPoint represents a single metric data point
@@ -419,14 +419,14 @@ type Notification struct {
 
 // Alert represents an alert
 type Alert struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Severity    string                 `json:"severity"`
-	Status      string                 `json:"status"`
-	Source      string                 `json:"source"`
-	Message     string                 `json:"message"`
-	Labels      map[string]string      `json:"labels"`
-	Annotations map[string]string      `json:"annotations"`
-	StartsAt    int64                  `json:"starts_at"`
-	EndsAt      int64                  `json:"ends_at,omitempty"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Severity    string            `json:"severity"`
+	Status      string            `json:"status"`
+	Source      string            `json:"source"`
+	Message     string            `json:"message"`
+	Labels      map[string]string `json:"labels"`
+	Annotations map[string]string `json:"annotations"`
+	StartsAt    int64             `json:"starts_at"`
+	EndsAt      int64             `json:"ends_at,omitempty"`
 }

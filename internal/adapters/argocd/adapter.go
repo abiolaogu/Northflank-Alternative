@@ -49,8 +49,8 @@ func NewAdapter(cfg *config.ArgoCDConfig, log *logger.Logger) *Adapter {
 
 // argoApplication represents an ArgoCD application
 type argoApplication struct {
-	Metadata argoMetadata      `json:"metadata"`
-	Spec     argoApplicationSpec `json:"spec"`
+	Metadata argoMetadata           `json:"metadata"`
+	Spec     argoApplicationSpec    `json:"spec"`
 	Status   *argoApplicationStatus `json:"status,omitempty"`
 }
 
@@ -72,19 +72,19 @@ type argoApplicationSpec struct {
 
 // argoSource represents the application source
 type argoSource struct {
-	RepoURL        string      `json:"repoURL"`
-	Path           string      `json:"path,omitempty"`
-	TargetRevision string      `json:"targetRevision"`
-	Helm           *argoHelm   `json:"helm,omitempty"`
+	RepoURL        string         `json:"repoURL"`
+	Path           string         `json:"path,omitempty"`
+	TargetRevision string         `json:"targetRevision"`
+	Helm           *argoHelm      `json:"helm,omitempty"`
 	Kustomize      *argoKustomize `json:"kustomize,omitempty"`
 }
 
 // argoHelm represents Helm-specific configuration
 type argoHelm struct {
-	ReleaseName string            `json:"releaseName,omitempty"`
-	ValueFiles  []string          `json:"valueFiles,omitempty"`
-	Values      string            `json:"values,omitempty"`
-	Parameters  []argoHelmParam   `json:"parameters,omitempty"`
+	ReleaseName string          `json:"releaseName,omitempty"`
+	ValueFiles  []string        `json:"valueFiles,omitempty"`
+	Values      string          `json:"values,omitempty"`
+	Parameters  []argoHelmParam `json:"parameters,omitempty"`
 }
 
 // argoHelmParam represents a Helm parameter
@@ -106,9 +106,9 @@ type argoDestination struct {
 
 // argoSyncPolicy represents the sync policy
 type argoSyncPolicy struct {
-	Automated      *argoAutomatedSync `json:"automated,omitempty"`
-	SyncOptions    []string           `json:"syncOptions,omitempty"`
-	Retry          *argoRetry         `json:"retry,omitempty"`
+	Automated   *argoAutomatedSync `json:"automated,omitempty"`
+	SyncOptions []string           `json:"syncOptions,omitempty"`
+	Retry       *argoRetry         `json:"retry,omitempty"`
 }
 
 // argoAutomatedSync represents automated sync configuration
@@ -120,8 +120,8 @@ type argoAutomatedSync struct {
 
 // argoRetry represents retry configuration
 type argoRetry struct {
-	Limit   int64        `json:"limit"`
-	Backoff argoBackoff  `json:"backoff"`
+	Limit   int64       `json:"limit"`
+	Backoff argoBackoff `json:"backoff"`
 }
 
 // argoBackoff represents backoff configuration
@@ -133,12 +133,12 @@ type argoBackoff struct {
 
 // argoApplicationStatus represents application status
 type argoApplicationStatus struct {
-	Health           argoHealthStatus   `json:"health"`
-	Sync             argoSyncStatus     `json:"sync"`
-	OperationState   *argoOperationState `json:"operationState,omitempty"`
-	Resources        []argoResourceStatus `json:"resources,omitempty"`
-	Summary          argoSummary        `json:"summary"`
-	History          []argoRevisionHistory `json:"history,omitempty"`
+	Health         argoHealthStatus      `json:"health"`
+	Sync           argoSyncStatus        `json:"sync"`
+	OperationState *argoOperationState   `json:"operationState,omitempty"`
+	Resources      []argoResourceStatus  `json:"resources,omitempty"`
+	Summary        argoSummary           `json:"summary"`
+	History        []argoRevisionHistory `json:"history,omitempty"`
 }
 
 // argoHealthStatus represents health status
@@ -149,8 +149,8 @@ type argoHealthStatus struct {
 
 // argoSyncStatus represents sync status
 type argoSyncStatus struct {
-	Status    string `json:"status"`
-	Revision  string `json:"revision,omitempty"`
+	Status     string `json:"status"`
+	Revision   string `json:"revision,omitempty"`
 	ComparedTo struct {
 		Source      argoSource      `json:"source"`
 		Destination argoDestination `json:"destination"`
@@ -159,20 +159,20 @@ type argoSyncStatus struct {
 
 // argoOperationState represents operation state
 type argoOperationState struct {
-	Phase     string    `json:"phase"`
-	Message   string    `json:"message,omitempty"`
-	StartedAt string    `json:"startedAt,omitempty"`
-	FinishedAt string   `json:"finishedAt,omitempty"`
+	Phase      string `json:"phase"`
+	Message    string `json:"message,omitempty"`
+	StartedAt  string `json:"startedAt,omitempty"`
+	FinishedAt string `json:"finishedAt,omitempty"`
 }
 
 // argoResourceStatus represents a resource status
 type argoResourceStatus struct {
-	Group     string `json:"group,omitempty"`
-	Version   string `json:"version"`
-	Kind      string `json:"kind"`
-	Namespace string `json:"namespace,omitempty"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
+	Group     string            `json:"group,omitempty"`
+	Version   string            `json:"version"`
+	Kind      string            `json:"kind"`
+	Namespace string            `json:"namespace,omitempty"`
+	Name      string            `json:"name"`
+	Status    string            `json:"status"`
 	Health    *argoHealthStatus `json:"health,omitempty"`
 }
 
@@ -183,10 +183,10 @@ type argoSummary struct {
 
 // argoRevisionHistory represents revision history
 type argoRevisionHistory struct {
-	Revision     string    `json:"revision"`
-	DeployedAt   string    `json:"deployedAt"`
-	ID           int64     `json:"id"`
-	Source       argoSource `json:"source"`
+	Revision   string     `json:"revision"`
+	DeployedAt string     `json:"deployedAt"`
+	ID         int64      `json:"id"`
+	Source     argoSource `json:"source"`
 }
 
 // Authenticate authenticates with ArgoCD and gets a session token
@@ -485,8 +485,8 @@ func (a *Adapter) GetApplicationHistory(ctx context.Context, externalID string) 
 // RollbackApplication rolls back to a previous version
 func (a *Adapter) RollbackApplication(ctx context.Context, externalID string, revision int64) error {
 	rollbackReq := map[string]interface{}{
-		"id":       revision,
-		"prune":    true,
+		"id":    revision,
+		"prune": true,
 	}
 
 	body, err := json.Marshal(rollbackReq)

@@ -18,28 +18,28 @@ import (
 
 // Event subjects for the platform
 const (
-	SubjectBuildStarted     = "build.started"
-	SubjectBuildCompleted   = "build.completed"
-	SubjectBuildFailed      = "build.failed"
-	SubjectDeployStarted    = "deploy.started"
-	SubjectDeployCompleted  = "deploy.completed"
-	SubjectDeployFailed     = "deploy.failed"
-	SubjectServiceCreated   = "service.created"
-	SubjectServiceUpdated   = "service.updated"
-	SubjectServiceDeleted   = "service.deleted"
-	SubjectServiceScaled    = "service.scaled"
-	SubjectProjectCreated   = "project.created"
-	SubjectProjectDeleted   = "project.deleted"
-	SubjectClusterCreated   = "cluster.created"
-	SubjectClusterUpdated   = "cluster.updated"
-	SubjectClusterDeleted   = "cluster.deleted"
-	SubjectSecretCreated    = "secret.created"
-	SubjectSecretUpdated    = "secret.updated"
-	SubjectSecretDeleted    = "secret.deleted"
-	SubjectAlertFired       = "alert.fired"
-	SubjectAlertResolved    = "alert.resolved"
-	SubjectWebhookReceived  = "webhook.received"
-	SubjectAuditLog         = "audit.log"
+	SubjectBuildStarted    = "build.started"
+	SubjectBuildCompleted  = "build.completed"
+	SubjectBuildFailed     = "build.failed"
+	SubjectDeployStarted   = "deploy.started"
+	SubjectDeployCompleted = "deploy.completed"
+	SubjectDeployFailed    = "deploy.failed"
+	SubjectServiceCreated  = "service.created"
+	SubjectServiceUpdated  = "service.updated"
+	SubjectServiceDeleted  = "service.deleted"
+	SubjectServiceScaled   = "service.scaled"
+	SubjectProjectCreated  = "project.created"
+	SubjectProjectDeleted  = "project.deleted"
+	SubjectClusterCreated  = "cluster.created"
+	SubjectClusterUpdated  = "cluster.updated"
+	SubjectClusterDeleted  = "cluster.deleted"
+	SubjectSecretCreated   = "secret.created"
+	SubjectSecretUpdated   = "secret.updated"
+	SubjectSecretDeleted   = "secret.deleted"
+	SubjectAlertFired      = "alert.fired"
+	SubjectAlertResolved   = "alert.resolved"
+	SubjectWebhookReceived = "webhook.received"
+	SubjectAuditLog        = "audit.log"
 )
 
 // NATSEventBus implements the EventBus interface using NATS
@@ -179,26 +179,26 @@ func (b *NATSEventBus) createStreams() error {
 
 	for _, stream := range streams {
 		_, err := b.js.AddStream(&nats.StreamConfig{
-			Name:       stream.name,
-			Subjects:   stream.subjects,
-			Retention:  nats.LimitsPolicy,
-			MaxAge:     7 * 24 * time.Hour, // Keep events for 7 days
-			MaxBytes:   1024 * 1024 * 1024, // 1GB max
-			Discard:    nats.DiscardOld,
-			Storage:    nats.FileStorage,
-			Replicas:   1,
+			Name:      stream.name,
+			Subjects:  stream.subjects,
+			Retention: nats.LimitsPolicy,
+			MaxAge:    7 * 24 * time.Hour, // Keep events for 7 days
+			MaxBytes:  1024 * 1024 * 1024, // 1GB max
+			Discard:   nats.DiscardOld,
+			Storage:   nats.FileStorage,
+			Replicas:  1,
 		})
 		if err != nil && err != nats.ErrStreamNameAlreadyInUse {
 			// Stream might already exist, try to update
 			_, err = b.js.UpdateStream(&nats.StreamConfig{
-				Name:       stream.name,
-				Subjects:   stream.subjects,
-				Retention:  nats.LimitsPolicy,
-				MaxAge:     7 * 24 * time.Hour,
-				MaxBytes:   1024 * 1024 * 1024,
-				Discard:    nats.DiscardOld,
-				Storage:    nats.FileStorage,
-				Replicas:   1,
+				Name:      stream.name,
+				Subjects:  stream.subjects,
+				Retention: nats.LimitsPolicy,
+				MaxAge:    7 * 24 * time.Hour,
+				MaxBytes:  1024 * 1024 * 1024,
+				Discard:   nats.DiscardOld,
+				Storage:   nats.FileStorage,
+				Replicas:  1,
 			})
 			if err != nil {
 				b.logger.Warn().Err(err).Str("stream", stream.name).Msg("Failed to create/update stream")

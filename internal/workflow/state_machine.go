@@ -18,16 +18,16 @@ import (
 type DeploymentState string
 
 const (
-	StateIdle           DeploymentState = "idle"
-	StateBuildQueued    DeploymentState = "build_queued"
-	StateBuilding       DeploymentState = "building"
-	StateBuildComplete  DeploymentState = "build_complete"
-	StateBuildFailed    DeploymentState = "build_failed"
-	StateDeployQueued   DeploymentState = "deploy_queued"
-	StateDeploying      DeploymentState = "deploying"
-	StateDeployComplete DeploymentState = "deploy_complete"
-	StateDeployFailed   DeploymentState = "deploy_failed"
-	StateRollingBack    DeploymentState = "rolling_back"
+	StateIdle             DeploymentState = "idle"
+	StateBuildQueued      DeploymentState = "build_queued"
+	StateBuilding         DeploymentState = "building"
+	StateBuildComplete    DeploymentState = "build_complete"
+	StateBuildFailed      DeploymentState = "build_failed"
+	StateDeployQueued     DeploymentState = "deploy_queued"
+	StateDeploying        DeploymentState = "deploying"
+	StateDeployComplete   DeploymentState = "deploy_complete"
+	StateDeployFailed     DeploymentState = "deploy_failed"
+	StateRollingBack      DeploymentState = "rolling_back"
 	StateRollbackComplete DeploymentState = "rollback_complete"
 )
 
@@ -67,13 +67,13 @@ type DeploymentWorkflow struct {
 
 // StateMachine manages deployment workflow state transitions
 type StateMachine struct {
-	mu         sync.RWMutex
-	workflows  map[uuid.UUID]*DeploymentWorkflow
-	ciAdapter  domain.CIAdapter
-	gitOps     domain.GitOpsAdapter
-	eventBus   domain.EventBus
+	mu          sync.RWMutex
+	workflows   map[uuid.UUID]*DeploymentWorkflow
+	ciAdapter   domain.CIAdapter
+	gitOps      domain.GitOpsAdapter
+	eventBus    domain.EventBus
 	serviceRepo domain.ServiceRepository
-	logger     *logger.Logger
+	logger      *logger.Logger
 	transitions map[DeploymentState]map[DeploymentEvent]DeploymentState
 }
 
@@ -126,9 +126,9 @@ func (sm *StateMachine) initTransitions() {
 			EventCancel:        StateBuildComplete,
 		},
 		StateDeploying: {
-			EventDeploySucceeded:  StateDeployComplete,
-			EventDeployFailed:     StateDeployFailed,
-			EventTriggerRollback:  StateRollingBack,
+			EventDeploySucceeded: StateDeployComplete,
+			EventDeployFailed:    StateDeployFailed,
+			EventTriggerRollback: StateRollingBack,
 		},
 		StateDeployComplete: {
 			EventTriggerBuild:    StateBuildQueued,
