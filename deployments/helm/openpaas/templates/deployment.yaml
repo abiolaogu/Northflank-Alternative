@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openpaas.fullname" . }}
+  labels:
+    {{- include "openpaas.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "openpaas.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "openpaas.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "openpaas.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.server.port }}
+              protocol: TCP
+          env:
+            - name: OPENPAAS_SERVER_HOST
+              value: {{ .Values.config.server.host | quote }}
+            - name: OPENPAAS_SERVER_PORT
+              value: {{ .Values.config.server.port | quote }}
+            - name: OPENPAAS_DATABASE_HOST
+              value: {{ .Values.database.host | default (printf "%s-postgresql" .Release.Name) | quote }}
+            - name: OPENPAAS_DATABASE_PORT
+              value: {{ .Values.database.port | quote }}
+            - name: OPENPAAS_DATABASE_NAME
+              value: {{ .Values.database.name | quote }}
+            - name: OPENPAAS_DATABASE_USER
+              value: {{ .Values.database.user | quote }}
+            - name: OPENPAAS_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openpaas.fullname" . }}-secrets
+                  key: database-password
+            - name: OPENPAAS_NATS_URL
+              value: {{ .Values.natsUrl | default (printf "nats://%s-nats:4222" .Release.Name) | quote }}
+            - name: OPENPAAS_AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openpaas.fullname" . }}-secrets
+                  key: jwt-secret
+            - name: OPENPAAS_COOLIFY_URL
+              value: {{ .Values.coolify.url | quote }}
+            - name: OPENPAAS_COOLIFY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openpaas.fullname" . }}-secrets
+                  key: coolify-api-key
+            - name: OPENPAAS_RANCHER_URL
+              value: {{ .Values.rancher.url | quote }}
+            - name: OPENPAAS_RANCHER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openpaas.fullname" . }}-secrets
+                  key: rancher-token
+            - name: OPENPAAS_ARGOCD_URL
+              value: {{ .Values.argocd.url | quote }}
+            - name: OPENPAAS_ARGOCD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openpaas.fullname" . }}-secrets
+                  key: argocd-token
+            - name: OPENPAAS_LOGGING_LEVEL
+              value: {{ .Values.config.logging.level | quote }}
+            - name: OPENPAAS_LOGGING_FORMAT
+              value: {{ .Values.config.logging.format | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

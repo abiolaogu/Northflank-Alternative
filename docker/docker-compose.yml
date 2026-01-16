@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - OPENPAAS_DATABASE_HOST=postgres
+      - OPENPAAS_DATABASE_PORT=5432
+      - OPENPAAS_DATABASE_NAME=openpaas
+      - OPENPAAS_DATABASE_USER=openpaas
+      - OPENPAAS_DATABASE_PASSWORD=openpaas
+      - OPENPAAS_NATS_URL=nats://nats:4222
+      - OPENPAAS_AUTH_JWT_SECRET=dev-secret-change-in-production
+      - OPENPAAS_COOLIFY_URL=http://coolify:3000
+      - OPENPAAS_RANCHER_URL=https://rancher:8443
+      - OPENPAAS_ARGOCD_URL=https://argocd:8080
+      - OPENPAAS_LOGGING_LEVEL=debug
+      - OPENPAAS_LOGGING_FORMAT=console
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    networks:
+      - openpaas
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=openpaas
+      - POSTGRES_USER=openpaas
+      - POSTGRES_PASSWORD=openpaas
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openpaas -d openpaas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - openpaas
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["--jetstream", "--store_dir=/data", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats_data:/data
+    networks:
+      - openpaas
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - openpaas
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:v2.49.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - openpaas
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:10.3.0
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - openpaas
+
+volumes:
+  postgres_data:
+  nats_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  openpaas:
+    driver: bridge

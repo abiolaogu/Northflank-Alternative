@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openpaas
+  labels:
+    app.kubernetes.io/name: openpaas
+    app.kubernetes.io/managed-by: kubectl
