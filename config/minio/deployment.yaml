@@ -1,0 +1,209 @@
+# MinIO Deployment for SkyForge
+# S3-compatible object storage (forked version)
+# Source: https://github.com/abiolaogu/MinIO
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  namespace: northstack-storage
+  labels:
+    app: minio
+spec:
+  serviceName: minio
+  replicas: 4  # Distributed mode requires minimum 4 nodes
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9000"
+        prometheus.io/path: "/minio/v2/metrics/cluster"
+    spec:
+      containers:
+        - name: minio
+          image: ghcr.io/abiolaogu/minio:latest
+          args:
+            - server
+            - http://minio-{0...3}.minio.northstack-storage.svc.cluster.local/data
+            - --console-address
+            - ":9001"
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: root-password
+            - name: MINIO_PROMETHEUS_AUTH_TYPE
+              value: "public"
+            - name: MINIO_API_DEFAULT_BUCKET_VERSIONING
+              value: "enabled"
+            - name: MINIO_STORAGE_CLASS_STANDARD
+              value: "EC:2"
+          ports:
+            - containerPort: 9000
+              name: api
+            - containerPort: 9001
+              name: console
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: minio
+              topologyKey: kubernetes.io/hostname
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: northstack-block-standard
+        resources:
+          requests:
+            storage: 500Gi
+
+---
+# MinIO Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: northstack-storage
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9000
+      targetPort: 9000
+      name: api
+    - port: 9001
+      targetPort: 9001
+      name: console
+  selector:
+    app: minio
+
+---
+# MinIO Headless Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-headless
+  namespace: northstack-storage
+spec:
+  clusterIP: None
+  ports:
+    - port: 9000
+      name: api
+  selector:
+    app: minio
+
+---
+# External Secret for MinIO credentials
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: minio-credentials
+  namespace: northstack-storage
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: ClusterSecretStore
+  target:
+    name: minio-credentials
+  data:
+    - secretKey: root-user
+      remoteRef:
+        key: secret/data/northstack/minio
+        property: root_user
+    - secretKey: root-password
+      remoteRef:
+        key: secret/data/northstack/minio
+        property: root_password
+
+---
+# MinIO Console Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio-console
+  namespace: northstack-storage
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+        - minio-console.northstack.io
+      secretName: minio-console-tls
+  rules:
+    - host: minio-console.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9001
+
+---
+# MinIO API Ingress (S3 endpoint)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio-api
+  namespace: northstack-storage
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+spec:
+  tls:
+    - hosts:
+        - s3.northstack.io
+      secretName: minio-api-tls
+  rules:
+    - host: s3.northstack.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9000

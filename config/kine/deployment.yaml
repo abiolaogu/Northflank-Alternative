@@ -1,0 +1,158 @@
+# Kine Deployment with YugabyteDB Backend
+# Replaces etcd for Kubernetes state storage
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kine
+  namespace: kube-system
+  labels:
+    app: kine
+    component: etcd-replacement
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kine
+  template:
+    metadata:
+      labels:
+        app: kine
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: kine
+      containers:
+        - name: kine
+          image: rancher/kine:v0.11.4
+          args:
+            - --endpoint
+            - "postgres://$(YUGABYTE_USER):$(YUGABYTE_PASSWORD)@$(YUGABYTE_HOST):$(YUGABYTE_PORT)/$(YUGABYTE_DATABASE)?sslmode=require"
+            - --listen-address
+            - "0.0.0.0:2379"
+            - --metrics-bind-address
+            - "0.0.0.0:8080"
+          env:
+            - name: YUGABYTE_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: kine-yugabyte-credentials
+                  key: host
+            - name: YUGABYTE_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: kine-yugabyte-credentials
+                  key: port
+            - name: YUGABYTE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: kine-yugabyte-credentials
+                  key: username
+            - name: YUGABYTE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kine-yugabyte-credentials
+                  key: password
+            - name: YUGABYTE_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: kine-yugabyte-credentials
+                  key: database
+          ports:
+            - containerPort: 2379
+              name: client
+            - containerPort: 8080
+              name: metrics
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: kine
+                topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kine
+  namespace: kube-system
+  labels:
+    app: kine
+spec:
+  type: ClusterIP
+  ports:
+    - port: 2379
+      targetPort: 2379
+      name: client
+    - port: 8080
+      targetPort: 8080
+      name: metrics
+  selector:
+    app: kine
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kine
+  namespace: kube-system
+
+---
+# External Secret for YugabyteDB credentials
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: kine-yugabyte-credentials
+  namespace: kube-system
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: ClusterSecretStore
+  target:
+    name: kine-yugabyte-credentials
+  data:
+    - secretKey: host
+      remoteRef:
+        key: secret/data/northstack/kine
+        property: yugabyte_host
+    - secretKey: port
+      remoteRef:
+        key: secret/data/northstack/kine
+        property: yugabyte_port
+    - secretKey: username
+      remoteRef:
+        key: secret/data/northstack/kine
+        property: yugabyte_user
+    - secretKey: password
+      remoteRef:
+        key: secret/data/northstack/kine
+        property: yugabyte_password
+    - secretKey: database
+      remoteRef:
+        key: secret/data/northstack/kine
+        property: yugabyte_database
