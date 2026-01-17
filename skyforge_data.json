@@ -1,0 +1,24 @@
+[
+  {
+    "id": "1",
+    "name": "production-api",
+    "description": "Main production API",
+    "services": 8,
+    "databases": 2,
+    "status": "healthy",
+    "members": 5,
+    "createdAt": "2026-01-02T17:12:16.933186+01:00",
+    "updatedAt": "2026-01-16T17:12:16.933202+01:00"
+  },
+  {
+    "id": "2",
+    "name": "staging-env",
+    "description": "Staging environment",
+    "services": 4,
+    "databases": 1,
+    "status": "healthy",
+    "members": 3,
+    "createdAt": "2025-12-17T17:12:16.933203+01:00",
+    "updatedAt": "2026-01-16T17:12:16.933203+01:00"
+  }
+]
